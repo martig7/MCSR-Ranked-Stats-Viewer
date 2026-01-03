@@ -5,7 +5,7 @@ Match Info Dialog - Displays detailed information about a specific match.
 import tkinter as tk
 from tkinter import ttk
 from typing import Optional
-from match import Match
+from ..core.match import Match
 
 
 class MatchInfoDialog:

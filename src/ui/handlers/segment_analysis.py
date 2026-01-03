@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import messagebox
 import statistics
 from typing import Optional, Dict, List, Any
-from match_info_dialog import show_match_info_dialog
+from ...visualization.match_info_dialog import show_match_info_dialog
 
 
 class SegmentAnalyzer:

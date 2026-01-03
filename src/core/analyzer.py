@@ -11,15 +11,15 @@ import os
 from typing import List, Dict, Optional, Any
 import statistics
 
-from match import Match
-from rate_limiter import RateLimitTracker, load_rate_limit_state, save_rate_limit_state
+from .match import Match
+from .rate_limiter import RateLimitTracker, load_rate_limit_state, save_rate_limit_state
 
 
 class MCSRAnalyzer:
     """Core analyzer for MCSR Ranked statistics with API communication and caching."""
     
-    # Cache directory for all JSON files
-    CACHE_DIR = "CACHE"
+    # Cache directory for all JSON files (relative to project root)
+    CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "cache")
     
     def __init__(self, username: str):
         self.username = username

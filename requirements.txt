@@ -1,0 +1,19 @@
+# MCSR Ranked User Statistics Requirements
+# GUI Framework
+# tkinter is included with Python standard library
+
+# Data Visualization
+matplotlib>=3.5.0
+
+# HTTP Requests
+requests>=2.25.0
+
+# Type Hints (for Python < 3.9)
+typing-extensions>=4.0.0; python_version < '3.9'
+
+# Development Dependencies (optional)
+# Uncomment for development setup
+# pytest>=7.0.0
+# pytest-cov>=4.0.0
+# flake8>=5.0.0
+# black>=22.0.0

@@ -1,8 +1,86 @@
-/.claude
-/.venv
-/CACHE
-/CLAUDE.md
-/old
-/__pycache__
-test_elo.py
-__pycache__
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude files (If you need the CLAUDE.md file let me know)
+.claude
+CLAUDE.md
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Application specific
+data/cache/*.json
+!data/cache/.gitkeep
+logs/
+*.log
+
+# Debug files
+debug_*.py
+temp_*.py
+
+# Backup files
+*.backup
+*.bak
+old/
+
+# User Specific
+data
+CACHE

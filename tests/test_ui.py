@@ -8,8 +8,14 @@ import tkinter as tk
 from unittest.mock import Mock, MagicMock, patch
 from datetime import datetime
 
-from mcsr_ui import MCSRStatsUI
-from mcsr_stats import MCSRAnalyzer, Match
+import sys
+import os
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.ui.main_window import MCSRStatsUI
+from src.core.analyzer import MCSRAnalyzer
+from src.core.match import Match
 
 
 class TestUICreation(unittest.TestCase):

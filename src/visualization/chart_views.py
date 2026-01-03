@@ -8,7 +8,7 @@ from tkinter import messagebox
 import matplotlib.pyplot as plt
 import statistics
 from typing import Optional, List, Dict, Any
-from match_info_dialog import show_match_info_dialog
+from .match_info_dialog import show_match_info_dialog
 
 
 class ChartViewBase:

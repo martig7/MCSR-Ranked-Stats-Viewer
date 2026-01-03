@@ -5,7 +5,7 @@ Handles background data fetching and state updates.
 
 import threading
 from tkinter import messagebox
-from mcsr_stats import MCSRAnalyzer
+from ...core.analyzer import MCSRAnalyzer
 
 
 class DataLoader:

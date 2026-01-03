@@ -13,15 +13,15 @@ from datetime import datetime
 import threading
 from typing import List, Dict, Any, Optional
 
-from mcsr_stats import MCSRAnalyzer
-from chart_builder import ChartBuilder, ChartType, SeriesConfig, ChartConfig, FigureConfig
-from text_presenter import TextPresenter
-from dialogs import FiltersDialog, ChartOptionsDialog
-from segment_analysis import SegmentAnalyzer
-from chart_views import ChartViewManager
-from comparison_handler import ComparisonHandler
-from data_loader import DataLoader
-from ui_components import TopBar, Sidebar, MainContent, StatusBar
+from ..core.analyzer import MCSRAnalyzer
+from ..visualization.chart_builder import ChartBuilder, ChartType, SeriesConfig, ChartConfig, FigureConfig
+from ..visualization.text_presenter import TextPresenter
+from .dialogs import FiltersDialog, ChartOptionsDialog
+from .handlers.segment_analysis import SegmentAnalyzer
+from ..visualization.chart_views import ChartViewManager
+from .handlers.comparison_handler import ComparisonHandler
+from .handlers.data_loader import DataLoader
+from .components import TopBar, Sidebar, MainContent, StatusBar
 
 
 class MCSRStatsUI:

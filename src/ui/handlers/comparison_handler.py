@@ -5,7 +5,7 @@ Handles loading and managing comparison player data for MCSR Ranked Stats Browse
 
 import threading
 from tkinter import messagebox
-from mcsr_stats import MCSRAnalyzer
+from ...core.analyzer import MCSRAnalyzer
 
 
 class ComparisonHandler:
