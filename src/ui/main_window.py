@@ -44,6 +44,9 @@ class MCSRStatsUI:
         # Segment trends display mode (False = absolute times, True = split times)
         self.show_splits_var = None  # Will be initialized in UI setup
         
+        # Segment text view mode (False = absolute times, True = split times)  
+        self.segment_text_mode_var = None  # Will be initialized in UI setup
+        
         # Chart options (user-configurable)
         self.chart_options = {
             'rolling_window': 10,
@@ -392,15 +395,8 @@ class MCSRStatsUI:
         if not match:
             return
         
-        # Build detail text using TextPresenter
-        self.detail_text.config(state=tk.NORMAL)
-        self.detail_text.delete('1.0', tk.END)
-        
-        # Use TextPresenter to generate match detail text
-        text = self.text_presenter.generate_match_detail_text(match, self.analyzer.username)
-        
-        self.detail_text.insert('1.0', text)
-        self.detail_text.config(state=tk.DISABLED)
+        # Use modern rich text presenter for match details
+        self.rich_text_presenter.render_match_detail(self.detail_text, match, self.analyzer.username)
             
     def _sort_treeview(self, col):
         """Sort treeview by column"""
@@ -414,6 +410,10 @@ class MCSRStatsUI:
         self._current_view = 'summary'
         self.notebook.select(0)  # Stats tab
         
+        # Hide segment controls when not viewing segments
+        if hasattr(self, 'segment_text_controls_frame'):
+            self.segment_text_controls_frame.pack_forget()
+        
         if not self.analyzer:
             self.stats_text.clear()
             self.stats_text.add_text("No data loaded. Please load data first.", ['error'])
@@ -422,19 +422,16 @@ class MCSRStatsUI:
         
         # Check if comparison is active
         if self.comparison_active and self.comparison_analyzer:
-            # TODO: Implement rich text comparison view
-            # For now, fall back to legacy method
-            main_text = self._generate_summary_text(self.analyzer)
-            comparison_text = self._generate_summary_text(self.comparison_analyzer)
+            # Use new structured comparison view
+            main_matches = self._get_all_filtered_matches()
+            comparison_matches = self._get_all_filtered_comparison_matches()
             
-            text = self.text_presenter.format_side_by_side_text(
-                main_text, comparison_text,
-                f"{self.analyzer.username}", f"{self.comparison_analyzer.username}"
+            # Use structured comparison renderer
+            self.rich_text_presenter.render_summary_comparison(
+                self.stats_text,
+                self.analyzer, main_matches,
+                self.comparison_analyzer, comparison_matches
             )
-            
-            self.stats_text.clear()
-            self.stats_text.add_text(text, ['monospace'])
-            self.stats_text.finalize()
         else:
             # Single player view with rich formatting
             all_matches = self._get_all_filtered_matches()
@@ -444,6 +441,10 @@ class MCSRStatsUI:
         """Show best times analysis"""
         self._current_view = 'best_times'
         self.notebook.select(0)  # Stats tab
+        
+        # Hide segment controls when not viewing segments
+        if hasattr(self, 'segment_text_controls_frame'):
+            self.segment_text_controls_frame.pack_forget()
         
         if not self.analyzer:
             self.stats_text.clear()
@@ -487,29 +488,12 @@ class MCSRStatsUI:
             comp_seasons = self.comparison_analyzer.season_breakdown(include_private_rooms=include_private,
                                                                    seed_type_filter=seed_val)
         
-        # Generate text for both players
-        main_text = ""
-        comp_text = ""
-        
-        if main_matches:
-            main_text = self.text_presenter.generate_best_times_text(
-                self.analyzer, main_matches, main_seasons, include_private
-            )
-        else:
-            main_text = f"No matches found for {self.analyzer.username} with current filters."
-        
-        if comp_matches:
-            comp_text = self.text_presenter.generate_best_times_text(
-                self.comparison_analyzer, comp_matches, comp_seasons, include_private
-            )
-        else:
-            comp_text = f"No matches found for {self.comparison_analyzer.username} with current filters."
-        
-        # Format side-by-side comparison
-        comparison_text = self.text_presenter.format_side_by_side_text(main_text, comp_text)
-        self.stats_text.clear()
-        self.stats_text.add_text(comparison_text, ['monospace'])
-        self.stats_text.finalize()
+        # Use new structured best times comparison renderer
+        self.rich_text_presenter.render_best_times_comparison(
+            self.stats_text,
+            self.analyzer, main_matches, main_seasons,
+            self.comparison_analyzer, comp_matches, comp_seasons
+        )
     
     def _show_best_times_single(self):
         """Show best times analysis for single player"""
@@ -623,6 +607,11 @@ class MCSRStatsUI:
         """Show match browser tab"""
         self._current_view = 'match_browser'
         self.notebook.select(2)  # Data tab
+        
+        # Hide segment controls when not viewing segments
+        if hasattr(self, 'segment_text_controls_frame'):
+            self.segment_text_controls_frame.pack_forget()
+            
         self._populate_match_tree()
     
     def _clear_display(self):

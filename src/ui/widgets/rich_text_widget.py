@@ -199,8 +199,8 @@ class RichTextWidget(tk.Text):
         """Add a line of text with newline."""
         self.add_text(text + '\n', tags)
     
-    def add_separator(self, char: str = '─', width: Optional[int] = None):
-        """Add a separator line."""
+    def add_separator(self, char: str = '-', width: Optional[int] = None):
+        """Add a separator line using simple ASCII characters."""
         if width is None:
             # Calculate width based on current widget size
             try:
@@ -217,80 +217,46 @@ class RichTextWidget(tk.Text):
         self.add_line(separator, ['separator'])
     
     def add_table(self, headers: List[str], rows: List[List[str]], 
-                  column_widths: Optional[List[int]] = None):
-        """Add a formatted table."""
-        if not headers or not rows:
+                  column_widths: Optional[List[int]] = None, 
+                  advanced=False, main_headers=None, sub_headers=None):
+        """Add a clean table using proper widget instead of ASCII art."""
+        if not rows:
+            self.add_line("No data available", ['muted'])
             return
         
-        # Calculate column widths if not provided
-        if column_widths is None:
-            column_widths = self._calculate_column_widths(headers, rows)
+        # Import table widget
+        from .table_widget import create_clean_table
         
-        # Add table header
-        header_line = self._format_table_row(headers, column_widths)
-        self.add_line(header_line, ['table_header'])
+        # Create a frame to hold the table
+        table_frame = tk.Frame(self, bg=self.colors['bg'])
         
-        # Add separator
-        separator_parts = []
-        for width in column_widths:
-            separator_parts.append('─' * width)
-        separator = '─'.join(separator_parts)
-        self.add_line(separator, ['separator'])
+        # Create the clean table
+        if advanced and main_headers and sub_headers:
+            table_widget = create_clean_table(
+                table_frame, 
+                headers, 
+                rows, 
+                theme=self.theme,
+                advanced=True,
+                main_headers=main_headers,
+                sub_headers=sub_headers
+            )
+        else:
+            table_widget = create_clean_table(
+                table_frame, 
+                headers, 
+                rows, 
+                theme=self.theme,
+                simple=True  # Use simple version for better integration
+            )
         
-        # Add table rows with alternating colors
-        for i, row in enumerate(rows):
-            row_line = self._format_table_row(row, column_widths)
-            tag = 'table_alt' if i % 2 == 1 else 'table_row'
-            self.add_line(row_line, [tag])
+        table_widget.pack(fill=tk.BOTH, expand=True)
+        
+        # Insert the table frame into the text widget
+        self.window_create(tk.END, window=table_frame)
+        self.add_line()  # Add spacing after table
     
-    def _calculate_column_widths(self, headers: List[str], rows: List[List[str]]) -> List[int]:
-        """Calculate optimal column widths for a table."""
-        if not headers:
-            return []
-        
-        # Start with header widths
-        widths = [len(header) for header in headers]
-        
-        # Check all row data
-        for row in rows:
-            for i, cell in enumerate(row):
-                if i < len(widths):
-                    widths[i] = max(widths[i], len(str(cell)))
-        
-        # Add padding
-        widths = [w + 2 for w in widths]
-        
-        # Ensure minimum width and handle very wide tables
-        try:
-            widget_width = self.winfo_width()
-            if widget_width > 1:
-                available_width = widget_width - 60  # Account for padding and scrollbar
-                total_width = sum(widths)
-                
-                # If table is too wide, proportionally reduce column widths
-                if total_width > available_width:
-                    scale_factor = available_width / total_width
-                    widths = [max(8, int(w * scale_factor)) for w in widths]
-        except:
-            pass  # Use calculated widths as-is if widget size unavailable
-        
-        return widths
-    
-    def _format_table_row(self, cells: List[str], widths: List[int]) -> str:
-        """Format a table row with proper alignment."""
-        formatted_cells = []
-        for i, cell in enumerate(cells):
-            if i < len(widths):
-                width = widths[i]
-                # Truncate if too long, pad if too short
-                cell_str = str(cell)
-                if len(cell_str) > width - 2:
-                    cell_str = cell_str[:width - 5] + '...'
-                formatted_cells.append(f" {cell_str:<{width-2}} ")
-            else:
-                formatted_cells.append(f" {str(cell)} ")
-        
-        return '│'.join(formatted_cells)
+    # Legacy table formatting methods removed - using new TableWidget instead
     
     def add_stats_block(self, title: str, stats: Dict[str, Any], 
                        value_color: str = 'accent'):

@@ -31,21 +31,7 @@ class TextPresenter:
         s = int((minutes - m) * 60)
         return f'{m}m {s}s'
     
-    def create_border_line(self, width: int, style: str = "thick") -> str:
-        """Create a border line with box-drawing characters."""
-        if style == "thick":
-            return "═" * width
-        elif style == "thin":
-            return "─" * width
-        else:
-            return "─" * width
-    
-    def format_table_header(self, title: str, width: int = 80) -> str:
-        """Create a formatted table header with borders."""
-        title_line = f"║ {title:<{width-4}} ║"
-        border_top = f"╔{self.create_border_line(width-2, 'thick')}╗"
-        border_bottom = f"╚{self.create_border_line(width-2, 'thick')}╝"
-        return f"{border_top}\n{title_line}\n{border_bottom}"
+    # Legacy ASCII art methods removed - use RichTextPresenter instead
     
     def format_side_by_side_text(self, left_text: str, right_text: str, 
                                 title_left: str = "Player 1", title_right: str = "Player 2") -> str:
@@ -77,34 +63,7 @@ class TextPresenter:
         
         return '\n'.join(result_lines)
     
-    def generate_welcome_text(self) -> str:
-        """Generate welcome message text."""
-        return """
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                           MCSR Ranked User Statistics                         ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
-
-Welcome! This application analyzes Minecraft Speedrunning (MCSR) Ranked statistics.
-
-To get started:
-1. Enter a username in the field above and click 'Load Data'
-2. Use the sidebar to navigate between different views and charts
-3. Apply filters to focus on specific matches or time periods
-
-Features:
-• Comprehensive match analysis with win/loss tracking
-• Best times analysis and PB progression
-• Segment timing breakdown (when available)
-• Season and seed type comparisons
-• Interactive charts with rolling averages
-• Player comparison functionality
-• Advanced filtering options
-
-The app fetches data from the MCSR Ranked API and caches it locally for faster
-subsequent access. Detailed segment data is loaded on-demand.
-
-Click 'Load Data' with a username to begin your analysis!
-        """
+    # Legacy welcome text removed - use RichTextPresenter.render_welcome() instead
     
     def generate_summary_text(self, analyzer, all_matches: List) -> str:
         """Generate comprehensive summary statistics text using actual UI logic."""

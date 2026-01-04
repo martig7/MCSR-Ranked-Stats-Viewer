@@ -165,6 +165,7 @@ class Sidebar:
             label = ttk.Label(frame, text="-", font=('Segoe UI', 9, 'bold'))
             label.pack(side=tk.RIGHT)
             self.ui.quick_stats_labels[stat] = label
+    
 
 
 class MainContent:
@@ -203,12 +204,35 @@ class MainContent:
         self.ui.stats_frame = ttk.Frame(self.ui.notebook, padding=10)
         self.ui.notebook.add(self.ui.stats_frame, text="Statistics")
         
+        # Segment view options frame (only shown when viewing segments)
+        self.ui.segment_text_controls_frame = ttk.Frame(self.ui.stats_frame)
+        # Initially not packed - will be shown when viewing segments
+        
+        # Initialize segment text mode variable (moved from sidebar)
+        self.ui.segment_text_mode_var = tk.BooleanVar(value=False)  # False = absolute times, True = split times
+        
         # Create rich text widget for stats
         self.ui.stats_text = RichTextWidget(self.ui.stats_frame, theme="dark")
         stats_scroll = ttk.Scrollbar(self.ui.stats_frame, orient=tk.VERTICAL, command=self.ui.stats_text.yview)
         self.ui.stats_text.configure(yscrollcommand=stats_scroll.set)
         stats_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.ui.stats_text.pack(fill=tk.BOTH, expand=True)
+        
+        # Segment mode toggle (clean, no extra help text)
+        self.ui.segment_mode_checkbox = ttk.Checkbutton(
+            self.ui.segment_text_controls_frame,
+            text="Show Split Times (time spent in each segment)",
+            variable=self.ui.segment_text_mode_var,
+            command=self._on_segment_mode_toggle
+        )
+        self.ui.segment_mode_checkbox.pack(side=tk.LEFT)
+    
+    def _on_segment_mode_toggle(self):
+        """Handle segment mode toggle between absolute and split times."""
+        # Refresh segment analysis if currently viewing segments
+        if hasattr(self.ui, '_current_view') and self.ui._current_view == 'segments':
+            if self.ui.segment_analyzer:
+                self.ui.segment_analyzer.show_segments_text()
         
     def _create_chart_tab(self):
         """Create the chart visualization tab"""
@@ -352,15 +376,14 @@ class MainContent:
         self.ui.detail_frame = ttk.LabelFrame(self.ui.match_paned, text="Match Details", padding=10)
         self.ui.match_paned.add(self.ui.detail_frame, weight=1)
         
-        # Create detail text widget
-        self.ui.detail_text = tk.Text(self.ui.detail_frame, wrap=tk.WORD, font=('Consolas', 10), 
-                                       bg='#1e1e1e', fg='#d4d4d4', height=10, insertbackground='white')
-        detail_scroll = ttk.Scrollbar(self.ui.detail_frame, orient=tk.VERTICAL, command=self.ui.detail_text.yview)
-        self.ui.detail_text.configure(yscrollcommand=detail_scroll.set)
-        detail_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        # Create enhanced detail text widget using RichTextWidget
+        from .widgets.rich_text_widget import RichTextWidget
+        self.ui.detail_text = RichTextWidget(self.ui.detail_frame, theme="dark", height=10)
         self.ui.detail_text.pack(fill=tk.BOTH, expand=True)
-        self.ui.detail_text.insert('1.0', "Select a match above to view details")
-        self.ui.detail_text.config(state=tk.DISABLED)
+        
+        # Add initial message
+        self.ui.detail_text.add_text("Select a match above to view details", ['muted', 'center'])
+        self.ui.detail_text.finalize()
         
         # Store match references for detail lookup
         self.ui.match_lookup = {}

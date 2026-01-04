@@ -57,17 +57,54 @@ class MCSRAnalyzer:
             pass
     
     def _apply_cached_segment_data(self):
-        """Apply cached segment data to loaded matches"""
+        """Apply cached segment data to loaded matches and validate split times"""
         segment_cache = self._load_segment_cache()
         applied_count = 0
+        recalculated_count = 0
         
         for match in self.matches:
             if str(match.id) in segment_cache:
                 cached_data = segment_cache[str(match.id)]
-                match.segments = cached_data.get('segments', {})
-                match.has_detailed_data = bool(match.segments)
+                segments = cached_data.get('segments', {})
+                
+                # Validate and recalculate split times if missing or invalid
+                if segments:
+                    needs_recalc = False
+                    for segment_name, segment_data in segments.items():
+                        # Check if split_time is missing or invalid
+                        if 'split_time' not in segment_data or segment_data['split_time'] is None:
+                            needs_recalc = True
+                            break
+                    
+                    if needs_recalc:
+                        # Recalculate split times using the same logic as fetch_segment_data
+                        segment_order = ['nether_enter', 'bastion_enter', 'fortress_enter', 
+                                       'blind_portal', 'stronghold_enter', 'end_enter', 'game_end']
+                        
+                        # Sort existing segments by their absolute time
+                        existing_segments = [(seg, segments[seg]['absolute_time']) 
+                                           for seg in segment_order if seg in segments and 'absolute_time' in segments[seg]]
+                        existing_segments.sort(key=lambda x: x[1])  # Sort by absolute time
+                        
+                        # Calculate split times
+                        prev_time = 0
+                        for segment_name, abs_time in existing_segments:
+                            # Ensure split time is not negative
+                            split_time = max(0, abs_time - prev_time)
+                            segments[segment_name]['split_time'] = split_time
+                            prev_time = abs_time
+                        
+                        recalculated_count += 1
+                
+                match.segments = segments
+                match.has_detailed_data = bool(segments)
                 if match.has_detailed_data:
                     applied_count += 1
+        
+        # Save updated cache if we recalculated any data
+        if recalculated_count > 0:
+            print(f"DEBUG: Recalculated split times for {recalculated_count} matches")
+            self._save_segment_cache(segment_cache)
         
         return applied_count
     
@@ -646,13 +683,16 @@ class MCSRAnalyzer:
                     segments = {}
                     if 'timelines' in data and data['timelines']:
                         # Filter timeline events to only include recognized speedrun segments
+                        # NOTE: Dragon death != game completion! Use completion time for game_end
                         segment_mappings = {
                             'story.enter_the_nether': 'nether_enter',
                             'nether.find_bastion': 'bastion_enter',
                             'nether.find_fortress': 'fortress_enter',
                             'projectelo.timeline.blind_travel': 'blind_portal',
                             'story.follow_ender_eye': 'stronghold_enter',
-                            # Note: end_enter and game_end might need different mapping
+                            'story.enter_the_end': 'end_enter',
+                            # Do NOT map dragon death to game_end - they are different events
+                            # game_end should use actual completion time, not dragon kill time
                         }
                         
                         for event in data['timelines']:
@@ -670,6 +710,13 @@ class MCSRAnalyzer:
                                     'absolute_time': event_time
                                 }
                     
+                    # Handle game_end separately using actual completion time (not dragon death)
+                    # Only add game_end if the user actually completed the run
+                    if match.user_completed and match.match_time is not None:
+                        segments['game_end'] = {
+                            'absolute_time': match.match_time
+                        }
+                    
                     # Store ELO change information if available
                     match.elo_changes = {}
                     if 'changes' in data and data['changes']:
@@ -682,16 +729,21 @@ class MCSRAnalyzer:
                                     'eloRate': change_data.get('eloRate')
                                 }
                     
-                    # Calculate split times
+                    # Calculate split times - only for segments that exist and are in correct order
                     segment_order = ['nether_enter', 'bastion_enter', 'fortress_enter', 
                                    'blind_portal', 'stronghold_enter', 'end_enter', 'game_end']
                     
+                    # Sort existing segments by their absolute time to ensure proper order
+                    existing_segments = [(seg, segments[seg]['absolute_time']) for seg in segment_order if seg in segments]
+                    existing_segments.sort(key=lambda x: x[1])  # Sort by absolute time
+                    
+                    # Calculate split times using the sorted segments
                     prev_time = 0
-                    for segment in segment_order:
-                        if segment in segments:
-                            abs_time = segments[segment]['absolute_time']
-                            segments[segment]['split_time'] = abs_time - prev_time
-                            prev_time = abs_time
+                    for segment_name, abs_time in existing_segments:
+                        # Ensure split time is not negative (data quality check)
+                        split_time = max(0, abs_time - prev_time)
+                        segments[segment_name]['split_time'] = split_time
+                        prev_time = abs_time
                     
                     # Update match
                     match.segments = segments
@@ -897,7 +949,12 @@ class MCSRAnalyzer:
                     # For game_end, only include if user actually completed the run
                     if segment == 'game_end' and not match.user_completed:
                         continue
-                    times.append(match.segments[segment]['absolute_time'])
+                    # Check if absolute_time exists and is valid
+                    if 'absolute_time' in match.segments[segment]:
+                        abs_time = match.segments[segment]['absolute_time']
+                        # Only include valid, positive absolute times
+                        if abs_time is not None and abs_time > 0:
+                            times.append(abs_time)
             
             if len(times) >= 1:
                 segment_stats[segment] = {
@@ -950,7 +1007,12 @@ class MCSRAnalyzer:
                         if segment == last_segment:
                             continue
                     
-                    split_times.append(match.segments[segment]['split_time'])
+                    # Check if split_time exists and is valid
+                    if 'split_time' in match.segments[segment]:
+                        split_time = match.segments[segment]['split_time']
+                        # Only include valid, non-negative split times
+                        if split_time is not None and split_time >= 0:
+                            split_times.append(split_time)
             
             if len(split_times) >= 1:
                 split_stats[segment] = {

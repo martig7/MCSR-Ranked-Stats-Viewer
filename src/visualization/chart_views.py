@@ -28,6 +28,11 @@ class ChartViewBase:
         """Common chart preparation logic"""
         self.ui._current_view = view_name
         self.ui.notebook.select(1)  # Charts tab
+        
+        # Hide segment controls when not viewing segments
+        if hasattr(self.ui, 'segment_text_controls_frame'):
+            self.ui.segment_text_controls_frame.pack_forget()
+            
         self.ui._set_chart_controls_visible(show_splits_toggle=show_splits_toggle,
                                           show_match_numbers_toggle=show_match_numbers_toggle)
         self.ui._current_chart_view = chart_view_name
@@ -38,7 +43,7 @@ class ChartViewBase:
     
     def _on_match_click(self, match):
         """Handle click on a match scatter point to show detailed info"""
-        show_match_info_dialog(self.ui.root, match, self.ui.text_presenter)
+        show_match_info_dialog(self.ui.root, match, self.ui.rich_text_presenter)
 
 
 class ProgressionChart(ChartViewBase):

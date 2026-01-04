@@ -35,6 +35,11 @@ class SegmentAnalyzer:
         """Show segment analysis in text tab"""
         self.ui._current_view = 'segments'
         self.ui.notebook.select(0)  # Stats tab
+        
+        # Show segment toggle controls at the top
+        if hasattr(self.ui, 'segment_text_controls_frame'):
+            self.ui.segment_text_controls_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 10), before=self.ui.stats_text)
+        
         self.ui.stats_text.clear()
         
         if not self.ui.analyzer:
@@ -67,26 +72,23 @@ class SegmentAnalyzer:
             comparison_segment_stats = self.ui.comparison_analyzer.get_segment_stats(comparison_detailed)
             comparison_split_stats = self.ui.comparison_analyzer.get_split_stats(comparison_detailed)
             
-            # Use side-by-side comparison format
-            main_text = self.ui.text_presenter.generate_segment_analysis_text(
-                self.ui.analyzer, filtered_matches, segment_stats, split_stats, filter_text
+            # Use structured segment comparison renderer
+            show_split_times = self.ui.segment_text_mode_var.get() if hasattr(self.ui, 'segment_text_mode_var') else False
+            self.ui.rich_text_presenter.render_segment_analysis_comparison(
+                self.ui.stats_text,
+                self.ui.analyzer, filtered_matches, segment_stats, split_stats,
+                self.ui.comparison_analyzer, comparison_matches, comparison_segment_stats, comparison_split_stats,
+                filter_text,
+                show_split_times=show_split_times
             )
-            comparison_text = self.ui.text_presenter.generate_segment_analysis_text(
-                self.ui.comparison_analyzer, comparison_matches, comparison_segment_stats, comparison_split_stats, filter_text
-            )
-            
-            text = self.ui.text_presenter.format_side_by_side_text(main_text, comparison_text)
-            self.ui.stats_text.add_text(text, ['monospace'])
-            self.ui.stats_text.finalize()
             return
         else:
-            # Use TextPresenter to generate segment analysis
-            text = self.ui.text_presenter.generate_segment_analysis_text(
-                self.ui.analyzer, filtered_matches, segment_stats, split_stats, filter_text
+            # Use modern rich text segment analysis
+            show_split_times = self.ui.segment_text_mode_var.get() if hasattr(self.ui, 'segment_text_mode_var') else False
+            self.ui.rich_text_presenter.render_segment_analysis(
+                self.ui.stats_text, self.ui.analyzer, segment_stats, split_stats, 
+                len(detailed_matches), filter_text, show_split_times=show_split_times
             )
-        
-        self.ui.stats_text.add_text(text, ['monospace'])
-        self.ui.stats_text.finalize()
     
     def show_segment_progression(self):
         """Show segment progression over time with individual charts"""
@@ -506,7 +508,7 @@ class SegmentAnalyzer:
     
     def _on_match_click(self, match):
         """Handle click on a match scatter point to show detailed info"""
-        show_match_info_dialog(self.ui.root, match, self.ui.text_presenter)
+        show_match_info_dialog(self.ui.root, match, self.ui.rich_text_presenter)
     
     def on_chart_click(self, event):
         """Handle click events on the chart canvas"""
