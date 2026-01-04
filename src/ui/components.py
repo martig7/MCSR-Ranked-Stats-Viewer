@@ -389,5 +389,16 @@ class StatusBar:
         self.ui.status_label = ttk.Label(self.ui.status_frame, textvariable=self.ui.status_var, font=('Segoe UI', 9))
         self.ui.status_label.pack(side=tk.LEFT)
         
+        # Right side frame for progress elements
+        self.ui.progress_frame = ttk.Frame(self.ui.status_frame)
+        self.ui.progress_frame.pack(side=tk.RIGHT)
+        
+        # Loading text (hidden by default)
+        self.ui.loading_text_var = tk.StringVar(value="")
+        self.ui.loading_text_label = ttk.Label(self.ui.progress_frame, textvariable=self.ui.loading_text_var, 
+                                               font=('Segoe UI', 9), foreground='blue')
+        # Initially not packed - will be shown during loading
+        
         # Progress bar (hidden by default)
-        self.ui.progress = ttk.Progressbar(self.ui.status_frame, mode='indeterminate', length=200)
+        self.ui.progress = ttk.Progressbar(self.ui.progress_frame, mode='indeterminate', length=200)
+        # Initially not packed - will be shown during loading

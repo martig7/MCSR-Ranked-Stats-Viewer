@@ -28,13 +28,16 @@ class DataLoader:
             return
             
         self.ui._set_status(f"Loading data for {username}...")
-        self.ui.progress.pack(side='right', padx=10)
-        self.ui.progress.start()
+        self.ui._show_loading_progress("Loading from cache...")
         
         def load_thread():
             try:
                 self.ui.analyzer = MCSRAnalyzer(username)
-                self.ui.analyzer.fetch_all_matches(use_cache=True)
+                
+                def progress_update(message):
+                    self.ui.root.after(0, lambda msg=message: self.ui._update_loading_progress(msg))
+                
+                self.ui.analyzer.fetch_all_matches(use_cache=True, progress_callback=progress_update)
                 self.ui.root.after(0, self._on_data_loaded)
             except Exception as e:
                 error_msg = str(e)
@@ -51,13 +54,16 @@ class DataLoader:
             return
             
         self.ui._set_status(f"Fetching data from API for {username}...")
-        self.ui.progress.pack(side='right', padx=10)
-        self.ui.progress.start()
+        self.ui._show_loading_progress("Fetching from API...")
         
         def refresh_thread():
             try:
                 self.ui.analyzer = MCSRAnalyzer(username)
-                self.ui.analyzer.fetch_all_matches(use_cache=False)
+                
+                def progress_update(message):
+                    self.ui.root.after(0, lambda msg=message: self.ui._update_loading_progress(msg))
+                
+                self.ui.analyzer.fetch_all_matches(use_cache=False, progress_callback=progress_update)
                 self.ui.root.after(0, self._on_data_loaded)
             except Exception as e:
                 error_msg = str(e)
@@ -73,12 +79,14 @@ class DataLoader:
             return
             
         self.ui._set_status("Fetching segment data...")
-        self.ui.progress.pack(side='right', padx=10)
-        self.ui.progress.start()
+        self.ui._show_loading_progress("Preparing segment fetch...")
         
         def fetch_thread():
             try:
-                fetched_count = self.ui.analyzer.fetch_segment_data(max_matches=100, force_refresh=False)
+                def progress_update(message):
+                    self.ui.root.after(0, lambda msg=message: self.ui._update_loading_progress(msg))
+                
+                fetched_count = self.ui.analyzer.fetch_segment_data(max_matches=100, force_refresh=False, progress_callback=progress_update)
                 self.ui.root.after(0, lambda: self._on_segments_loaded(fetched_count))
             except Exception as e:
                 error_msg = str(e)
@@ -154,8 +162,7 @@ class DataLoader:
         
     def _on_data_loaded(self):
         """Called when data is loaded"""
-        self.ui.progress.stop()
-        self.ui.progress.pack_forget()
+        self.ui._hide_loading_progress()
         
         # Update season filter
         seasons = set(m.season for m in self.ui.analyzer.matches)
@@ -178,8 +185,7 @@ class DataLoader:
         
     def _on_segments_loaded(self, fetched_count):
         """Called when segment data is loaded"""
-        self.ui.progress.stop()
-        self.ui.progress.pack_forget()
+        self.ui._hide_loading_progress()
         
         detailed_count = sum(1 for m in self.ui.analyzer.matches if m.has_detailed_data)
         if fetched_count > 0:
@@ -191,7 +197,6 @@ class DataLoader:
         
     def _on_load_error(self, error):
         """Called when loading fails"""
-        self.ui.progress.stop()
-        self.ui.progress.pack_forget()
+        self.ui._hide_loading_progress()
         self.ui._set_status(f"Error: {error}")
         messagebox.showerror("Error", f"Failed to load data: {error}")

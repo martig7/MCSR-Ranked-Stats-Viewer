@@ -639,7 +639,28 @@ class MCSRStatsUI:
     
     def _set_status(self, message: str):
         """Set status bar message"""
-        self.status_label.config(text=message)
+        self.status_var.set(message)
+    
+    def _show_loading_progress(self, loading_text: str = ""):
+        """Show progress bar and loading text"""
+        self.progress.pack(side=tk.RIGHT, padx=(5, 0))
+        self.progress.start()
+        
+        if loading_text:
+            self.loading_text_var.set(loading_text)
+            self.loading_text_label.pack(side=tk.RIGHT, padx=(0, 10))
+    
+    def _update_loading_progress(self, loading_text: str):
+        """Update loading progress text"""
+        self.loading_text_var.set(loading_text)
+        self.root.update_idletasks()
+    
+    def _hide_loading_progress(self):
+        """Hide progress bar and loading text"""
+        self.progress.stop()
+        self.progress.pack_forget()
+        self.loading_text_label.pack_forget()
+        self.loading_text_var.set("")
 
 
 def main():

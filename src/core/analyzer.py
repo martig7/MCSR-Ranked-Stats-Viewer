@@ -151,7 +151,7 @@ class MCSRAnalyzer:
         
         return matches[:max_matches]
     
-    def fetch_all_matches(self, use_cache: bool = True, max_matches: int = None) -> List[Match]:
+    def fetch_all_matches(self, use_cache: bool = True, max_matches: int = None, progress_callback=None) -> List[Match]:
         """Fetch all matches using cache or API"""
         print(f"DEBUG: fetch_all_matches called for user {self.username}, use_cache={use_cache}")
         print(f"DEBUG: cache_file path: {self.cache_file}")
@@ -186,13 +186,19 @@ class MCSRAnalyzer:
         print("DEBUG: Cache not found or fetching fresh data from API")
         if not use_cache:
             # Fresh fetch: get all seasons (full refresh)
-            seasons = self._discover_seasons()
+            if progress_callback:
+                progress_callback("Discovering seasons...")
+            seasons = self._discover_seasons(progress_callback)
             print(f"DEBUG: Discovered seasons: {seasons}")
             if not seasons:
+                if progress_callback:
+                    progress_callback("Fetching current season...")
                 self.matches = self._fetch_current_season_only(max_matches or 5000)
             else:
                 self.matches = []
-                for season in seasons:
+                for i, season in enumerate(seasons):
+                    if progress_callback:
+                        progress_callback(f"Fetching season {season} ({i+1}/{len(seasons)})")
                     season_matches = self._fetch_season_data(season, 5000)
                     self.matches.extend([Match(data, self.username) for data in season_matches])
         else:
@@ -212,11 +218,13 @@ class MCSRAnalyzer:
         save_rate_limit_state(self.rate_limiter, self.rate_limit_file)
         return self.matches
     
-    def _discover_seasons(self) -> List[int]:
+    def _discover_seasons(self, progress_callback=None) -> List[int]:
         """Discover which seasons have matches for this user"""
         seasons = []
         
         for season in range(3, 15):  # Check seasons 3-14
+            if progress_callback:
+                progress_callback(f"Checking season {season}...")
             if not self.rate_limiter.can_make_request():
                 wait_time = self.rate_limiter.get_wait_time()
                 if wait_time > 0:
@@ -587,7 +595,7 @@ class MCSRAnalyzer:
         
         return progression
     
-    def fetch_segment_data(self, max_matches: int = 100, force_refresh: bool = False) -> int:
+    def fetch_segment_data(self, max_matches: int = 100, force_refresh: bool = False, progress_callback=None) -> int:
         """Fetch detailed segment data for matches"""
         # Load existing segment cache
         segment_cache = self._load_segment_cache()
@@ -606,11 +614,17 @@ class MCSRAnalyzer:
             return 0
         
         fetched_count = 0
-        for match in matches_to_fetch:
+        total_to_fetch = len(matches_to_fetch)
+        
+        for i, match in enumerate(matches_to_fetch):
             if not self.rate_limiter.can_make_request():
                 wait_time = self.rate_limiter.get_wait_time()
                 if wait_time > 0:
                     time.sleep(wait_time)
+            
+            # Update progress
+            if progress_callback:
+                progress_callback(f"Fetching segment data: {fetched_count + 1}/{total_to_fetch}")
             
             url = f"{self.base_url}matches/{match.id}"
             
