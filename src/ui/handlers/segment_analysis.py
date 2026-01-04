@@ -6,6 +6,7 @@ Handles all segment-related views and interactions for MCSR Ranked Stats Browser
 import tkinter as tk
 from tkinter import messagebox
 import statistics
+import matplotlib.pyplot as plt
 from typing import Optional, Dict, List, Any
 from ...visualization.match_info_dialog import show_match_info_dialog
 
@@ -87,7 +88,7 @@ class SegmentAnalyzer:
         """Show segment progression over time with individual charts"""
         self.ui._current_view = 'segment_progression'
         self.ui.notebook.select(1)  # Charts tab
-        self.ui._set_chart_controls_visible(show_splits_toggle=True)
+        self.ui._set_chart_controls_visible(show_splits_toggle=True, show_match_numbers_toggle=True)
         self.ui._current_chart_view = '_show_segment_progression'
         
         # Reset expansion state when showing grid view
@@ -304,9 +305,24 @@ class SegmentAnalyzer:
             dates = self._cached_segment_data[segment]['dates']
             matches = self._cached_segment_data[segment]['matches']
             
+            # Check if match numbers mode is enabled
+            use_match_numbers = self.ui.show_match_numbers_var.get()
+            
+            if use_match_numbers:
+                x_data = list(range(1, len(times) + 1))  # Match numbers 1, 2, 3, ...
+                x_label = "Match Number"
+            else:
+                x_data = dates  # Date/time
+                x_label = "Date"
+            
             # Get full data for rolling calculations
             full_times = self._cached_full_segment_data[segment]['times']
             full_dates = self._cached_full_segment_data[segment]['dates']
+            
+            if use_match_numbers:
+                full_x_data = list(range(1, len(full_times) + 1))
+            else:
+                full_x_data = full_dates
             
             # Use 4 distinct colors per chart: main scatter, main line, comp scatter, comp line
             # Spread colors across palette to avoid similar adjacent colors
@@ -317,7 +333,7 @@ class SegmentAnalyzer:
             comp_line_color_idx = (base_color_offset + 3) % len(cb.palette)
             
             # Main player scatter plot (circles)
-            cb.plot_scatter(ax, dates, times, 
+            cb.plot_scatter(ax, x_data, times, 
                            size=self.ui.chart_options['point_size'] * 0.8,
                            alpha=0.6, color_index=main_scatter_color_idx, marker='o',
                            match_data=matches)
@@ -327,8 +343,14 @@ class SegmentAnalyzer:
                 comp_times = comparison_data[segment]['times']
                 comp_dates = comparison_data[segment]['dates']
                 comp_matches = comparison_data[segment]['matches']
+                
+                # Prepare comparison x-axis data
+                if use_match_numbers:
+                    comp_x_data = list(range(1, len(comp_times) + 1))
+                else:
+                    comp_x_data = comp_dates
                 # Plot comparison data with circles but different color and smaller size
-                cb.plot_scatter(ax, comp_dates, comp_times,
+                cb.plot_scatter(ax, comp_x_data, comp_times,
                                size=self.ui.chart_options['point_size'] * 0.6,
                                alpha=0.5, color_index=comp_scatter_color_idx, marker='o',
                                match_data=comp_matches)
@@ -336,21 +358,21 @@ class SegmentAnalyzer:
             # Rolling std dev bands (if enabled) - draw first so avg line is on top
             if self.ui.chart_options['show_rolling_std'] and len(times) >= 1:
                 window = self.ui.chart_options['rolling_window']
-                cb.add_rolling_std_dev(ax, dates, times,
+                cb.add_rolling_std_dev(ax, x_data, times,
                                        window=window, label=None, color_index=main_line_color_idx,
-                                       full_x_data=full_dates, full_y_data=full_times)
+                                       full_x_data=full_x_data, full_y_data=full_times)
             
             # Rolling average (if enabled)
             if self.ui.chart_options['show_rolling_avg'] and len(times) >= 1:
                 window = self.ui.chart_options['rolling_window']
-                cb.add_rolling_average(ax, dates, times, 
+                cb.add_rolling_average(ax, x_data, times, 
                                       window=window, label=None, color_index=main_line_color_idx,
-                                      full_x_data=full_dates, full_y_data=full_times,
+                                      full_x_data=full_x_data, full_y_data=full_times,
                                       is_comparison=False)
             
             # PB line (if enabled)
             if self.ui.chart_options['show_pb_line']:
-                cb.add_pb_line(ax, dates, times, label=None, color_index=main_line_color_idx)
+                cb.add_pb_line(ax, x_data, times, label=None, color_index=main_line_color_idx)
             
             # Add comparison player statistics if available
             if segment in comparison_data:
@@ -361,34 +383,40 @@ class SegmentAnalyzer:
                 comp_full_times = comparison_full_data.get(segment, {}).get('times', [])
                 comp_full_dates = comparison_full_data.get(segment, {}).get('dates', [])
                 
+                # Prepare comparison full x-axis data
+                if use_match_numbers:
+                    comp_full_x_data = list(range(1, len(comp_full_times) + 1))
+                else:
+                    comp_full_x_data = comp_full_dates
+                
                 # Comparison rolling std dev (if enabled)
                 if self.ui.chart_options['show_rolling_std'] and len(comp_times) >= 1:
                     comp_window = self.ui.chart_options['rolling_window']
-                    cb.add_rolling_std_dev(ax, comp_dates, comp_times,
+                    cb.add_rolling_std_dev(ax, comp_x_data, comp_times,
                                            window=comp_window, label=None, alpha=0.2, 
                                            color_index=comp_line_color_idx,
-                                           full_x_data=comp_full_dates, full_y_data=comp_full_times)
+                                           full_x_data=comp_full_x_data, full_y_data=comp_full_times)
                 
                 # Comparison rolling average (if enabled)
                 if self.ui.chart_options['show_rolling_avg'] and len(comp_times) >= 1:
                     comp_window = self.ui.chart_options['rolling_window']
-                    cb.add_rolling_average(ax, comp_dates, comp_times, 
+                    cb.add_rolling_average(ax, comp_x_data, comp_times, 
                                           window=comp_window, label=None, color_index=comp_line_color_idx,
-                                          full_x_data=comp_full_dates, full_y_data=comp_full_times,
+                                          full_x_data=comp_full_x_data, full_y_data=comp_full_times,
                                           is_comparison=True)
                 
                 # Comparison PB line (if enabled)
                 if self.ui.chart_options['show_pb_line']:
-                    cb.add_pb_line(ax, comp_dates, comp_times, label=None, color_index=comp_line_color_idx)
+                    cb.add_pb_line(ax, comp_x_data, comp_times, label=None, color_index=comp_line_color_idx)
             
             y_label = 'Split (min)' if show_splits else 'Time (min)'
             cb.set_labels(ax, title=segment_display[segment], 
-                         xlabel='Date', ylabel=y_label,
+                         xlabel=x_label, ylabel=y_label,
                          title_fontsize=10, label_fontsize=8)
             cb.set_grid(ax, self.ui.chart_options['show_grid'])
             
-            # Format date axis for better readability in small charts
-            if len(dates) > 0:
+            # Format x-axis for better readability in small charts
+            if not use_match_numbers and len(dates) > 0:
                 # Limit to max 4 ticks on small charts
                 max_ticks = 4
                 if len(dates) > max_ticks:
@@ -405,6 +433,10 @@ class SegmentAnalyzer:
                     # For few data points, use all dates
                     tick_labels = [d.strftime('%m/%d') for d in dates]
                     cb.set_xticks(ax, dates, tick_labels, rotation=45, ha='right')
+            elif use_match_numbers:
+                # For match numbers, let matplotlib handle the ticks automatically
+                # but make sure they're integers
+                ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
             
             # Add stats annotation
             avg_time = statistics.mean(times)
@@ -500,7 +532,7 @@ class SegmentAnalyzer:
         self._expanded_segment = segment
         
         # Show back button
-        self.ui._set_chart_controls_visible(show_splits_toggle=True, show_back_button=True)
+        self.ui._set_chart_controls_visible(show_splits_toggle=True, show_back_button=True, show_match_numbers_toggle=True)
         
         # Get cached data
         times = self._cached_segment_data[segment]['times']
@@ -524,6 +556,22 @@ class SegmentAnalyzer:
         # Clear the axes map for expanded view (no clicking in expanded view)
         self._segment_axes_map = {}
         
+        # Check if match numbers mode is enabled
+        use_match_numbers = self.ui.show_match_numbers_var.get()
+        
+        if use_match_numbers:
+            x_data = list(range(1, len(times) + 1))  # Match numbers 1, 2, 3, ...
+            x_label = "Match Number"
+        else:
+            x_data = dates  # Date/time
+            x_label = "Date"
+        
+        # Prepare full x-axis data for rolling calculations
+        if use_match_numbers:
+            full_x_data = list(range(1, len(full_times) + 1))
+        else:
+            full_x_data = full_dates
+        
         # Get color index from available segments and use 4-color scheme
         segment_idx = self._available_segments.index(segment) if segment in self._available_segments else 0
         base_color_offset = (segment_idx * 4) % len(cb.palette)
@@ -533,7 +581,7 @@ class SegmentAnalyzer:
         comp_line_color_idx = (base_color_offset + 3) % len(cb.palette)
         
         # Main player scatter plot with larger points (circles)
-        cb.plot_scatter(ax, dates, times, 
+        cb.plot_scatter(ax, x_data, times, 
                        size=self.ui.chart_options['point_size'],
                        alpha=0.6, color_index=main_scatter_color_idx, marker='o',
                        label=self.ui.analyzer.username, match_data=matches)
@@ -554,7 +602,13 @@ class SegmentAnalyzer:
                 comp_full_times = self._cached_comparison_full_data[segment]['times']
                 comp_full_dates = self._cached_comparison_full_data[segment]['dates']
             
-            cb.plot_scatter(ax, comp_dates, comp_times,
+            # Prepare comparison x-axis data
+            if use_match_numbers:
+                comp_x_data = list(range(1, len(comp_times) + 1))
+            else:
+                comp_x_data = comp_dates
+            
+            cb.plot_scatter(ax, comp_x_data, comp_times,
                            size=self.ui.chart_options['point_size'] * 0.8,
                            alpha=0.5, color_index=comp_scatter_color_idx, marker='o',
                            label=self.ui.comparison_analyzer.username, match_data=comp_matches)
@@ -562,56 +616,68 @@ class SegmentAnalyzer:
         # Rolling std dev bands (if enabled) - draw first so avg line is on top
         if self.ui.chart_options['show_rolling_std'] and len(times) >= 1:
             window = self.ui.chart_options['rolling_window']
-            cb.add_rolling_std_dev(ax, dates, times,
+            cb.add_rolling_std_dev(ax, x_data, times,
                                    window=window, label=f'±1σ ({window}-pt)', 
                                    color_index=main_line_color_idx,
-                                   full_x_data=full_dates, full_y_data=full_times)
+                                   full_x_data=full_x_data, full_y_data=full_times)
             
             # Add comparison player rolling std dev if available
             if comp_times and comp_dates and len(comp_times) >= 1:
                 comp_window = self.ui.chart_options['rolling_window']
-                cb.add_rolling_std_dev(ax, comp_dates, comp_times,
+                # Prepare comparison full x-axis data for rolling calculations
+                if use_match_numbers:
+                    comp_full_x_data = list(range(1, len(comp_full_times) + 1))
+                else:
+                    comp_full_x_data = comp_full_dates
+                    
+                cb.add_rolling_std_dev(ax, comp_x_data, comp_times,
                                        window=comp_window, label=f'Comp ±1σ ({comp_window}-pt)',
                                        alpha=0.3, color_index=comp_line_color_idx,
-                                       full_x_data=comp_full_dates, full_y_data=comp_full_times)
+                                       full_x_data=comp_full_x_data, full_y_data=comp_full_times)
         
         # Rolling average (if enabled)
         if self.ui.chart_options['show_rolling_avg'] and len(times) >= 1:
             window = self.ui.chart_options['rolling_window']
-            cb.add_rolling_average(ax, dates, times, 
+            cb.add_rolling_average(ax, x_data, times, 
                                   window=window, color_index=main_line_color_idx,
                                   label=f'{window}-match average',
-                                  full_x_data=full_dates, full_y_data=full_times,
+                                  full_x_data=full_x_data, full_y_data=full_times,
                                   is_comparison=False)
             
             # Add comparison player rolling average if available
             if comp_times and comp_dates and len(comp_times) >= 1:
                 comp_window = self.ui.chart_options['rolling_window']
-                cb.add_rolling_average(ax, comp_dates, comp_times, 
+                # Use same comparison full x-axis data as calculated above
+                if use_match_numbers:
+                    comp_full_x_data = list(range(1, len(comp_full_times) + 1))
+                else:
+                    comp_full_x_data = comp_full_dates
+                    
+                cb.add_rolling_average(ax, comp_x_data, comp_times, 
                                       window=comp_window, color_index=comp_line_color_idx,
                                       label=f'Comp {comp_window}-match avg',
-                                      full_x_data=comp_full_dates, full_y_data=comp_full_times,
+                                      full_x_data=comp_full_x_data, full_y_data=comp_full_times,
                                       is_comparison=True)
         
         # PB line (if enabled)
         if self.ui.chart_options['show_pb_line']:
             label = 'Best Split' if show_splits else 'PB'
-            cb.add_pb_line(ax, dates, times, label=label, color_index=main_line_color_idx)
+            cb.add_pb_line(ax, x_data, times, label=label, color_index=main_line_color_idx)
             
             # Add comparison player PB line if available
             if comp_times and comp_dates:
                 comp_label = 'Comp Best Split' if show_splits else 'Comp PB'
-                cb.add_pb_line(ax, comp_dates, comp_times, label=comp_label, color_index=comp_line_color_idx)
+                cb.add_pb_line(ax, comp_x_data, comp_times, label=comp_label, color_index=comp_line_color_idx)
         
         y_label = 'Split Time (minutes)' if show_splits else 'Time (minutes)'
         cb.set_labels(ax, title=segment_name, 
-                     xlabel='Date', ylabel=y_label,
+                     xlabel=x_label, ylabel=y_label,
                      title_fontsize=14, label_fontsize=10)
         cb.set_grid(ax, self.ui.chart_options['show_grid'])
         
-        # Format date axis for better readability in expanded view
-        if len(dates) > 0:
-            # For expanded view, allow more ticks (up to 8)
+        # Format x-axis for better readability in expanded view
+        if not use_match_numbers and len(dates) > 0:
+            # For expanded view with dates, allow more ticks (up to 8)
             max_ticks = 8
             if len(dates) > max_ticks:
                 # Select evenly spaced dates
@@ -627,6 +693,10 @@ class SegmentAnalyzer:
                 # For few data points, use all dates with full format
                 tick_labels = [d.strftime('%m/%d/%y') for d in dates]
                 cb.set_xticks(ax, dates, tick_labels, rotation=30, ha='right')
+        elif use_match_numbers:
+            # For match numbers, let matplotlib handle the ticks automatically
+            # but make sure they're integers
+            ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
         
         # Show legend
         cb.set_legend(ax)

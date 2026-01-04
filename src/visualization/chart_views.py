@@ -23,11 +23,13 @@ class ChartViewBase:
         """
         self.ui = ui_context
     
-    def _prepare_chart(self, view_name: str, chart_view_name: str, show_splits_toggle: bool = False):
+    def _prepare_chart(self, view_name: str, chart_view_name: str, show_splits_toggle: bool = False,
+                      show_match_numbers_toggle: bool = False):
         """Common chart preparation logic"""
         self.ui._current_view = view_name
         self.ui.notebook.select(1)  # Charts tab
-        self.ui._set_chart_controls_visible(show_splits_toggle=show_splits_toggle)
+        self.ui._set_chart_controls_visible(show_splits_toggle=show_splits_toggle,
+                                          show_match_numbers_toggle=show_match_numbers_toggle)
         self.ui._current_chart_view = chart_view_name
         
     def _check_analyzer(self) -> bool:
@@ -44,7 +46,7 @@ class ProgressionChart(ChartViewBase):
     
     def show(self):
         """Show progression chart"""
-        self._prepare_chart('progression', '_show_progression')
+        self._prepare_chart('progression', '_show_progression', show_match_numbers_toggle=True)
         
         if not self._check_analyzer():
             return
@@ -56,7 +58,16 @@ class ProgressionChart(ChartViewBase):
             messagebox.showinfo("Info", "Need at least 10 matches for progression chart")
             return
         
-        dates = [m.datetime_obj for m in completed]
+        # Check if match numbers mode is enabled
+        use_match_numbers = self.ui.show_match_numbers_var.get()
+        
+        if use_match_numbers:
+            x_data = list(range(1, len(completed) + 1))  # Match numbers 1, 2, 3, ...
+            x_label = "Match Number"
+        else:
+            x_data = [m.datetime_obj for m in completed]  # Date/time
+            x_label = "Date"
+        
         times = [m.match_time / 1000 / 60 for m in completed]
         
         # Use ChartBuilder
@@ -68,13 +79,13 @@ class ProgressionChart(ChartViewBase):
         
         # Check if comparison is active
         if self.ui.comparison_active and self.ui.comparison_analyzer:
-            self._show_comparison_chart(cb, ax, dates, times, completed)
+            self._show_comparison_chart(cb, ax, x_data, times, completed, x_label, use_match_numbers)
             return
         
         # Single player view
-        self._show_single_chart(cb, ax, dates, times, completed)
+        self._show_single_chart(cb, ax, x_data, times, completed, x_label, use_match_numbers)
     
-    def _show_comparison_chart(self, cb, ax, dates, times, completed):
+    def _show_comparison_chart(self, cb, ax, x_data, times, completed, x_label, use_match_numbers):
         """Show progression chart with comparison player"""
         # Get comparison data with same filtering as main player
         comp_completed = sorted([m for m in self.ui._get_filtered_comparison_matches() if not m.forfeited], 
@@ -82,10 +93,15 @@ class ProgressionChart(ChartViewBase):
         
         if len(comp_completed) < 10:
             # Fall back to single player view if comparison doesn't have enough data
-            self._show_single_chart(cb, ax, dates, times, completed)
+            self._show_single_chart(cb, ax, x_data, times, completed, x_label, use_match_numbers)
             return
         
-        comp_dates = [m.datetime_obj for m in comp_completed]
+        # Prepare comparison x-axis data
+        if use_match_numbers:
+            comp_x_data = list(range(1, len(comp_completed) + 1))
+        else:
+            comp_x_data = [m.datetime_obj for m in comp_completed]
+        
         comp_times = [m.match_time / 1000 / 60 for m in comp_completed]
         
         # Use palette colors for each player (0 = main, 1 = comparison)
@@ -95,12 +111,12 @@ class ProgressionChart(ChartViewBase):
         comp_color = cb.get_color(comp_color_idx)
         
         # Scatter plots for both players
-        cb.plot_scatter(ax, dates, times, 
+        cb.plot_scatter(ax, x_data, times, 
                        label=f'{self.ui.analyzer.username}',
                        color_index=main_color_idx,
                        size=self.ui.chart_options['point_size'],
                        alpha=0.5, match_data=completed)
-        cb.plot_scatter(ax, comp_dates, comp_times,
+        cb.plot_scatter(ax, comp_x_data, comp_times,
                        label=f'{self.ui.comparison_analyzer.username}', 
                        color_index=comp_color_idx,
                        size=self.ui.chart_options['point_size'],
@@ -110,34 +126,37 @@ class ProgressionChart(ChartViewBase):
         
         # Rolling standard deviation bands (if enabled) - draw first so avg line is on top
         if self.ui.chart_options['show_rolling_std']:
-            cb.add_rolling_std_dev(ax, dates, times, window=window,
+            cb.add_rolling_std_dev(ax, x_data, times, window=window,
                                    color=main_color, fill_alpha=0.15)
-            cb.add_rolling_std_dev(ax, comp_dates, comp_times, window=window,
+            cb.add_rolling_std_dev(ax, comp_x_data, comp_times, window=window,
                                    color=comp_color, fill_alpha=0.15)
         
         # Rolling average (if enabled)
         if self.ui.chart_options['show_rolling_avg']:
-            cb.add_rolling_average(ax, dates, times, window=window, 
+            cb.add_rolling_average(ax, x_data, times, window=window, 
                                   color=main_color,
                                   label=f'{self.ui.analyzer.username} avg',
                                   is_comparison=False)
-            cb.add_rolling_average(ax, comp_dates, comp_times, window=window,
+            cb.add_rolling_average(ax, comp_x_data, comp_times, window=window,
                                   color=comp_color,
                                   label=f'{self.ui.comparison_analyzer.username} avg',
                                   is_comparison=True)
         
         # PB lines (if enabled)
         if self.ui.chart_options['show_pb_line']:
-            cb.add_pb_line(ax, dates, times, color=main_color, 
+            cb.add_pb_line(ax, x_data, times, color=main_color, 
                           label=f'{self.ui.analyzer.username} PB')
-            cb.add_pb_line(ax, comp_dates, comp_times, color=comp_color,
+            cb.add_pb_line(ax, comp_x_data, comp_times, color=comp_color,
                           label=f'{self.ui.comparison_analyzer.username} PB')
         
         cb.set_labels(ax, title=f'Progression Comparison: {self.ui.analyzer.username} vs {self.ui.comparison_analyzer.username}',
-                    xlabel='Match Date', ylabel='Time (minutes)')
+                    xlabel=x_label, ylabel='Time (minutes)')
         cb.set_grid(ax, self.ui.chart_options['show_grid'])
         cb.set_legend(ax)
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+        
+        # Only rotate labels for date mode
+        if not use_match_numbers:
+            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
         
         # Enable click detection for match details
         cb.enable_match_click_detection(self._on_match_click)
@@ -147,10 +166,10 @@ class ProgressionChart(ChartViewBase):
         
         cb.finalize()
     
-    def _show_single_chart(self, cb, ax, dates, times, matches):
+    def _show_single_chart(self, cb, ax, x_data, times, matches, x_label, use_match_numbers):
         """Show progression chart for single player"""
         # Scatter plot
-        cb.plot_scatter(ax, dates, times, 
+        cb.plot_scatter(ax, x_data, times, 
                        label='Individual matches',
                        size=self.ui.chart_options['point_size'],
                        alpha=0.5, match_data=matches)
@@ -158,27 +177,29 @@ class ProgressionChart(ChartViewBase):
         # Rolling standard deviation bands (if enabled) - draw first so avg line is on top
         if self.ui.chart_options['show_rolling_std']:
             window = self.ui.chart_options['rolling_window']
-            cb.add_rolling_std_dev(ax, dates, times, window=window,
+            cb.add_rolling_std_dev(ax, x_data, times, window=window,
                                    label=f'±1σ ({window}-pt)')
         
         # Rolling average (if enabled)
         if self.ui.chart_options['show_rolling_avg']:
             window = self.ui.chart_options['rolling_window']
-            cb.add_rolling_average(ax, dates, times, window=window, 
+            cb.add_rolling_average(ax, x_data, times, window=window, 
                                   label=f'{window}-match average',
                                   is_comparison=False)
         
         # PB line (if enabled)
         if self.ui.chart_options['show_pb_line']:
-            cb.add_pb_line(ax, dates, times, label='PB')
+            cb.add_pb_line(ax, x_data, times, label='PB')
         
         cb.set_labels(ax, 
                      title=f'{self.ui.analyzer.username} - Performance Progression',
-                     xlabel='Date', ylabel='Time (minutes)')
+                     xlabel=x_label, ylabel='Time (minutes)')
         cb.set_grid(ax, self.ui.chart_options['show_grid'])
         cb.set_legend(ax)
         
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+        # Only rotate labels for date mode
+        if not use_match_numbers:
+            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
         
         # Enable click detection for match details
         cb.enable_match_click_detection(self._on_match_click)

@@ -244,6 +244,16 @@ class MainContent:
         )
         # Initially hidden - will be shown when segment trends is selected
         
+        # Match number x-axis toggle (shown for charts with date progression)
+        self.ui.show_match_numbers_var = tk.BooleanVar(value=False)
+        self.ui.match_numbers_check = ttk.Checkbutton(
+            self.ui.view_controls_frame,
+            text="Show Match Numbers (instead of dates)",
+            variable=self.ui.show_match_numbers_var,
+            command=self.ui._on_match_numbers_toggle
+        )
+        # Initially hidden - will be shown when date-based progression charts are active
+        
         # Right side - general chart options
         self.ui.chart_options_frame = ttk.Frame(self.ui.chart_controls_frame)
         self.ui.chart_options_frame.pack(side=tk.RIGHT, fill=tk.X)

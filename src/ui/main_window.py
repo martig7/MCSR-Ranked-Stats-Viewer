@@ -541,6 +541,12 @@ class MCSRStatsUI:
             # Determine which chart is currently displayed and refresh it
             self._refresh_current_chart()
     
+    def _on_match_numbers_toggle(self):
+        """Handle match numbers x-axis toggle - refresh current chart"""
+        # Refresh the current chart if applicable
+        if self.analyzer and self.notebook.index(self.notebook.select()) == 1:
+            self._refresh_current_chart()
+    
     def _refresh_current_chart(self):
         """Refresh the currently displayed chart"""
         # This will be set by each chart method
@@ -588,12 +594,18 @@ class MCSRStatsUI:
             on_apply
         )
     
-    def _set_chart_controls_visible(self, show_splits_toggle: bool, show_back_button: bool = False):
+    def _set_chart_controls_visible(self, show_splits_toggle: bool, show_back_button: bool = False, 
+                                   show_match_numbers_toggle: bool = False):
         """Show or hide chart control options based on current view"""
         if show_splits_toggle:
             self.splits_check.pack(side=tk.LEFT)
         else:
             self.splits_check.pack_forget()
+        
+        if show_match_numbers_toggle:
+            self.match_numbers_check.pack(side=tk.LEFT, padx=(10, 0))
+        else:
+            self.match_numbers_check.pack_forget()
         
         if show_back_button:
             self.back_btn_frame.pack(fill=tk.X, pady=(0, 5), before=self.chart_controls_frame)
