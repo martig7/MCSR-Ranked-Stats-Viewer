@@ -345,7 +345,8 @@ class SegmentAnalyzer:
                 window = self.ui.chart_options['rolling_window']
                 cb.add_rolling_average(ax, dates, times, 
                                       window=window, label=None, color_index=main_line_color_idx,
-                                      full_x_data=full_dates, full_y_data=full_times)
+                                      full_x_data=full_dates, full_y_data=full_times,
+                                      is_comparison=False)
             
             # PB line (if enabled)
             if self.ui.chart_options['show_pb_line']:
@@ -373,7 +374,8 @@ class SegmentAnalyzer:
                     comp_window = self.ui.chart_options['rolling_window']
                     cb.add_rolling_average(ax, comp_dates, comp_times, 
                                           window=comp_window, label=None, color_index=comp_line_color_idx,
-                                          full_x_data=comp_full_dates, full_y_data=comp_full_times)
+                                          full_x_data=comp_full_dates, full_y_data=comp_full_times,
+                                          is_comparison=True)
                 
                 # Comparison PB line (if enabled)
                 if self.ui.chart_options['show_pb_line']:
@@ -441,6 +443,9 @@ class SegmentAnalyzer:
         
         # Enable click detection for match details
         cb.enable_match_click_detection(self._on_match_click)
+        
+        # Enable hover tooltips for rolling averages
+        cb.enable_hover_tooltips(self.ui._minutes_to_str)
         
         cb.finalize()
     
@@ -576,7 +581,8 @@ class SegmentAnalyzer:
             cb.add_rolling_average(ax, dates, times, 
                                   window=window, color_index=main_line_color_idx,
                                   label=f'{window}-match average',
-                                  full_x_data=full_dates, full_y_data=full_times)
+                                  full_x_data=full_dates, full_y_data=full_times,
+                                  is_comparison=False)
             
             # Add comparison player rolling average if available
             if comp_times and comp_dates and len(comp_times) >= 1:
@@ -584,7 +590,8 @@ class SegmentAnalyzer:
                 cb.add_rolling_average(ax, comp_dates, comp_times, 
                                       window=comp_window, color_index=comp_line_color_idx,
                                       label=f'Comp {comp_window}-match avg',
-                                      full_x_data=comp_full_dates, full_y_data=comp_full_times)
+                                      full_x_data=comp_full_dates, full_y_data=comp_full_times,
+                                      is_comparison=True)
         
         # PB line (if enabled)
         if self.ui.chart_options['show_pb_line']:
@@ -678,6 +685,9 @@ class SegmentAnalyzer:
         
         # Enable click detection for match details
         cb.enable_match_click_detection(self._on_match_click)
+        
+        # Enable hover tooltips for rolling averages
+        cb.enable_hover_tooltips(self.ui._minutes_to_str)
         
         cb.finalize()
     

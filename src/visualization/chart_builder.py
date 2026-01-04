@@ -125,6 +125,13 @@ class ChartBuilder:
         self.scatter_data = {}  # Maps axes to list of (x, y, match_data) tuples
         self.click_callbacks = {}  # Maps axes to callback functions
         
+        # For hover tooltips on rolling averages
+        self.rolling_avg_data = {}  # Maps axes to list of (x, y) tuples for rolling averages
+        self.comparison_rolling_avg_data = {}  # Maps axes to comparison player rolling avg data
+        self.hover_tooltip = None  # Current tooltip annotation
+        self.hover_line = None  # Current hover line indicator
+        self.time_formatter = None  # Function to format time values for display
+        
     def set_theme(self, **kwargs):
         """Update theme colors"""
         self.theme.update(kwargs)
@@ -148,6 +155,10 @@ class ChartBuilder:
         self.axes = []
         self.scatter_data = {}
         self.click_callbacks = {}
+        self.rolling_avg_data = {}
+        self.comparison_rolling_avg_data = {}
+        self.hover_tooltip = None
+        self.hover_line = None
         return self
         
     def create_subplots(self, rows: int = 1, cols: int = 1) -> List[plt.Axes]:
@@ -274,7 +285,8 @@ class ChartBuilder:
                             window: int = 10, color: str = None,
                             linewidth: float = 2, alpha: float = 0.8,
                             label: str = None, color_index: int = 1,
-                            full_x_data=None, full_y_data=None):
+                            full_x_data=None, full_y_data=None,
+                            is_comparison=False):
         """Add a rolling average line to the chart
         
         Args:
@@ -289,6 +301,7 @@ class ChartBuilder:
             color_index: Color palette index
             full_x_data: Complete X dataset (for calculating rolling avg with historical data)
             full_y_data: Complete Y dataset (for calculating rolling avg with historical data)
+            is_comparison: Whether this is comparison player data
         """
         if len(y_data) < 1:
             return self
@@ -364,6 +377,24 @@ class ChartBuilder:
             label = label or f'{window}-point average'
             ax.plot(rolling_x, rolling_avg, color=color, linewidth=linewidth,
                    alpha=alpha, label=label)
+            
+            # Store rolling average data for hover tooltips
+            if ax not in self.rolling_avg_data:
+                self.rolling_avg_data[ax] = []
+            
+            # Store as (x, y) tuples for hover interpolation
+            rolling_data = list(zip(rolling_x, rolling_avg))
+            
+            # Store based on explicit comparison flag
+            if is_comparison:
+                if ax not in self.comparison_rolling_avg_data:
+                    self.comparison_rolling_avg_data[ax] = []
+                self.comparison_rolling_avg_data[ax] = rolling_data
+            else:
+                if ax not in self.rolling_avg_data:
+                    self.rolling_avg_data[ax] = []
+                self.rolling_avg_data[ax] = rolling_data
+        
         return self
     
     def add_rolling_std_dev(self, ax: plt.Axes, x_data, y_data,
@@ -652,6 +683,179 @@ class ChartBuilder:
             max_distance = ((x_range * 0.05)**2 + (y_range * 0.05)**2)**0.5
         
         return closest_match if min_distance <= max_distance else None
+    
+    def enable_hover_tooltips(self, time_formatter=None):
+        """
+        Enable hover tooltips for rolling average lines showing time values.
+        
+        Args:
+            time_formatter: Function to format time values for display (e.g., minutes_to_str)
+        """
+        self.time_formatter = time_formatter or (lambda x: f"{x:.2f} min")
+        
+        # Connect hover event
+        self.canvas.mpl_connect('motion_notify_event', self._on_hover)
+        
+        return self
+    
+    def _on_hover(self, event):
+        """Handle hover events on the chart canvas"""
+        try:
+            if event.inaxes is None:
+                self._clear_hover_elements()
+                return
+            
+            ax = event.inaxes
+            
+            # Check if this axis has rolling average data
+            if ax not in self.rolling_avg_data and ax not in self.comparison_rolling_avg_data:
+                self._clear_hover_elements()
+                return
+            
+            if event.xdata is None or event.ydata is None:
+                self._clear_hover_elements()
+                return
+            
+            # Find the closest x value in rolling average data
+            hover_info = self._find_hover_info(ax, event.xdata)
+            
+            if hover_info:
+                self._show_hover_tooltip(ax, event.xdata, hover_info)
+            else:
+                self._clear_hover_elements()
+        except Exception:
+            # Silently handle any hover errors to prevent crashes
+            self._clear_hover_elements()
+    
+    def _find_hover_info(self, ax, hover_x):
+        """Find rolling average values at the hover x position"""
+        hover_info = {}
+        
+        # Check main player rolling average
+        if ax in self.rolling_avg_data:
+            main_value = self._interpolate_rolling_avg(self.rolling_avg_data[ax], hover_x)
+            if main_value is not None:
+                hover_info['main'] = main_value
+        
+        # Check comparison player rolling average
+        if ax in self.comparison_rolling_avg_data:
+            comp_value = self._interpolate_rolling_avg(self.comparison_rolling_avg_data[ax], hover_x)
+            if comp_value is not None:
+                hover_info['comparison'] = comp_value
+        
+        return hover_info if hover_info else None
+    
+    def _interpolate_rolling_avg(self, rolling_data, hover_x):
+        """Interpolate rolling average value at hover_x position"""
+        if not rolling_data:
+            return None
+        
+        x_values = [point[0] for point in rolling_data]
+        y_values = [point[1] for point in rolling_data]
+        
+        # Handle datetime objects - ensure consistent conversion
+        if len(x_values) > 0 and hasattr(x_values[0], 'timestamp'):
+            # Data has datetime objects, need to convert hover_x from matplotlib datenum
+            import matplotlib.dates as mdates
+            
+            # Convert matplotlib date number to datetime
+            if hasattr(hover_x, 'timestamp'):
+                # Already a datetime
+                hover_x_dt = hover_x
+            else:
+                # Convert matplotlib date number to datetime
+                hover_x_dt = mdates.num2date(hover_x)
+            
+            # Convert to timestamp for comparison
+            hover_x_val = hover_x_dt.timestamp()
+            x_vals_converted = [x.timestamp() for x in x_values]
+        else:
+            # Numeric data
+            hover_x_val = float(hover_x)
+            x_vals_converted = [float(x) for x in x_values]
+        
+        # Find the closest points for interpolation
+        if not x_vals_converted or hover_x_val < min(x_vals_converted) or hover_x_val > max(x_vals_converted):
+            return None
+        
+        # Linear interpolation
+        for i in range(len(x_vals_converted) - 1):
+            if x_vals_converted[i] <= hover_x_val <= x_vals_converted[i + 1]:
+                # Interpolate between points i and i+1
+                x1, x2 = x_vals_converted[i], x_vals_converted[i + 1]
+                y1, y2 = y_values[i], y_values[i + 1]
+                
+                if x2 == x1:
+                    return y1
+                
+                # Linear interpolation formula
+                ratio = (hover_x_val - x1) / (x2 - x1)
+                interpolated_y = y1 + ratio * (y2 - y1)
+                return interpolated_y
+        
+        return None
+    
+    def _show_hover_tooltip(self, ax, hover_x, hover_info):
+        """Display hover tooltip and vertical line"""
+        self._clear_hover_elements()
+        
+        # Create vertical line at hover position
+        ylim = ax.get_ylim()
+        self.hover_line = ax.axvline(hover_x, color='white', linestyle='--', 
+                                    alpha=0.7, linewidth=1)
+        
+        # Format tooltip text (no date/x value, only rolling averages)
+        tooltip_lines = []
+        
+        # Add rolling average values
+        if 'main' in hover_info:
+            formatted_time = self.time_formatter(hover_info['main'])
+            tooltip_lines.append(f"Rolling Avg: {formatted_time}")
+        
+        if 'comparison' in hover_info:
+            formatted_time = self.time_formatter(hover_info['comparison'])
+            tooltip_lines.append(f"Comp. Rolling Avg: {formatted_time}")
+        
+        tooltip_text = '\n'.join(tooltip_lines)
+        
+        # Position tooltip in the upper right of the plot
+        x_pos = 0.98
+        y_pos = 0.98
+        
+        self.hover_tooltip = ax.text(x_pos, y_pos, tooltip_text,
+                                   transform=ax.transAxes,
+                                   bbox=dict(boxstyle='round,pad=0.3', 
+                                           facecolor=self.theme['legend_bg'],
+                                           alpha=0.9, edgecolor='white'),
+                                   color=self.theme['text_color'],
+                                   fontsize=9,
+                                   ha='right', va='top',
+                                   zorder=1000)
+        
+        # Redraw canvas
+        self.canvas.draw_idle()
+    
+    def _clear_hover_elements(self):
+        """Clear hover tooltip and line"""
+        try:
+            if self.hover_tooltip:
+                self.hover_tooltip.remove()
+                self.hover_tooltip = None
+        except Exception:
+            self.hover_tooltip = None
+        
+        try:
+            if self.hover_line:
+                self.hover_line.remove()
+                self.hover_line = None
+        except Exception:
+            self.hover_line = None
+        
+        # Redraw canvas
+        try:
+            self.canvas.draw_idle()
+        except Exception:
+            pass
         
     def finalize(self):
         """Apply tight layout and draw the canvas"""

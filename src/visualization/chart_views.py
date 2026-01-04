@@ -119,10 +119,12 @@ class ProgressionChart(ChartViewBase):
         if self.ui.chart_options['show_rolling_avg']:
             cb.add_rolling_average(ax, dates, times, window=window, 
                                   color=main_color,
-                                  label=f'{self.ui.analyzer.username} avg')
+                                  label=f'{self.ui.analyzer.username} avg',
+                                  is_comparison=False)
             cb.add_rolling_average(ax, comp_dates, comp_times, window=window,
                                   color=comp_color,
-                                  label=f'{self.ui.comparison_analyzer.username} avg')
+                                  label=f'{self.ui.comparison_analyzer.username} avg',
+                                  is_comparison=True)
         
         # PB lines (if enabled)
         if self.ui.chart_options['show_pb_line']:
@@ -139,6 +141,9 @@ class ProgressionChart(ChartViewBase):
         
         # Enable click detection for match details
         cb.enable_match_click_detection(self._on_match_click)
+        
+        # Enable hover tooltips for rolling averages
+        cb.enable_hover_tooltips(self.ui._minutes_to_str)
         
         cb.finalize()
     
@@ -160,7 +165,8 @@ class ProgressionChart(ChartViewBase):
         if self.ui.chart_options['show_rolling_avg']:
             window = self.ui.chart_options['rolling_window']
             cb.add_rolling_average(ax, dates, times, window=window, 
-                                  label=f'{window}-match average')
+                                  label=f'{window}-match average',
+                                  is_comparison=False)
         
         # PB line (if enabled)
         if self.ui.chart_options['show_pb_line']:
@@ -176,6 +182,9 @@ class ProgressionChart(ChartViewBase):
         
         # Enable click detection for match details
         cb.enable_match_click_detection(self._on_match_click)
+        
+        # Enable hover tooltips for rolling averages
+        cb.enable_hover_tooltips(self.ui._minutes_to_str)
         
         cb.finalize()
 
