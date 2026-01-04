@@ -16,6 +16,7 @@ from typing import List, Dict, Any, Optional
 from ..core.analyzer import MCSRAnalyzer
 from ..visualization.chart_builder import ChartBuilder, ChartType, SeriesConfig, ChartConfig, FigureConfig
 from ..visualization.text_presenter import TextPresenter
+from ..visualization.rich_text_presenter import RichTextPresenter
 from .dialogs import FiltersDialog, ChartOptionsDialog
 from .handlers.segment_analysis import SegmentAnalyzer
 from ..visualization.chart_views import ChartViewManager
@@ -35,7 +36,8 @@ class MCSRStatsUI:
         self.current_plot = None
         self.match_lookup = {}  # Store match references for detail view
         self.chart_builder = None  # Initialized after figure is created
-        self.text_presenter = TextPresenter()  # Text formatting and generation
+        self.text_presenter = TextPresenter()  # Legacy text formatting and generation
+        self.rich_text_presenter = RichTextPresenter()  # Modern text formatting and generation
         self.segment_analyzer = None  # Initialized after UI setup to avoid circular dependencies
         self.chart_views = None  # Initialized after UI setup to avoid circular dependencies
         
@@ -110,9 +112,7 @@ class MCSRStatsUI:
         
     def _show_welcome(self):
         """Show welcome message"""
-        self.stats_text.delete('1.0', tk.END)
-        welcome_text = self.text_presenter.generate_welcome_text()
-        self.stats_text.insert('1.0', welcome_text)
+        self.rich_text_presenter.render_welcome(self.stats_text)
         
     def _set_status(self, message):
         """Update status bar"""
@@ -413,37 +413,42 @@ class MCSRStatsUI:
         """Show summary stats"""
         self._current_view = 'summary'
         self.notebook.select(0)  # Stats tab
-        self.stats_text.delete('1.0', tk.END)
         
         if not self.analyzer:
-            self.stats_text.insert('1.0', "No data loaded. Please load data first.")
+            self.stats_text.clear()
+            self.stats_text.add_text("No data loaded. Please load data first.", ['error'])
+            self.stats_text.finalize()
             return
         
         # Check if comparison is active
         if self.comparison_active and self.comparison_analyzer:
-            # Split-screen comparison view
+            # TODO: Implement rich text comparison view
+            # For now, fall back to legacy method
             main_text = self._generate_summary_text(self.analyzer)
             comparison_text = self._generate_summary_text(self.comparison_analyzer)
             
-            # Use TextPresenter for side-by-side formatting
             text = self.text_presenter.format_side_by_side_text(
                 main_text, comparison_text,
                 f"{self.analyzer.username}", f"{self.comparison_analyzer.username}"
             )
+            
+            self.stats_text.clear()
+            self.stats_text.add_text(text, ['monospace'])
+            self.stats_text.finalize()
         else:
-            # Single player view
-            text = self._generate_summary_text(self.analyzer)
-        
-        self.stats_text.insert('1.0', text)
+            # Single player view with rich formatting
+            all_matches = self._get_all_filtered_matches()
+            self.rich_text_presenter.render_summary(self.stats_text, self.analyzer, all_matches)
     
     def _show_best_times(self):
         """Show best times analysis"""
         self._current_view = 'best_times'
         self.notebook.select(0)  # Stats tab
-        self.stats_text.delete('1.0', tk.END)
         
         if not self.analyzer:
-            self.stats_text.insert('1.0', "No data loaded. Please load data first.")
+            self.stats_text.clear()
+            self.stats_text.add_text("No data loaded. Please load data first.", ['error'])
+            self.stats_text.finalize()
             return
         
         # Check if comparison is active
@@ -459,7 +464,9 @@ class MCSRStatsUI:
         comp_matches = self._get_all_filtered_comparison_matches()
         
         if not main_matches and not comp_matches:
-            self.stats_text.insert('1.0', "No matches found with the current filters for either player.")
+            self.stats_text.clear()
+            self.stats_text.add_text("No matches found with the current filters for either player.", ['warning'])
+            self.stats_text.finalize()
             return
         
         # Get filter settings
@@ -500,7 +507,9 @@ class MCSRStatsUI:
         
         # Format side-by-side comparison
         comparison_text = self.text_presenter.format_side_by_side_text(main_text, comp_text)
-        self.stats_text.insert('1.0', comparison_text)
+        self.stats_text.clear()
+        self.stats_text.add_text(comparison_text, ['monospace'])
+        self.stats_text.finalize()
     
     def _show_best_times_single(self):
         """Show best times analysis for single player"""
@@ -508,7 +517,9 @@ class MCSRStatsUI:
         all_matches = self._get_all_filtered_matches()
         
         if not all_matches:
-            self.stats_text.insert('1.0', "No matches found with the current filters.")
+            self.stats_text.clear()
+            self.stats_text.add_text("No matches found with the current filters.", ['warning'])
+            self.stats_text.finalize()
             return
         
         # Get season breakdown for text generation
@@ -521,12 +532,8 @@ class MCSRStatsUI:
         seasons = self.analyzer.season_breakdown(include_private_rooms=include_private, 
                                                   seed_type_filter=seed_val)
         
-        # Use TextPresenter to generate best times analysis
-        text = self.text_presenter.generate_best_times_text(
-            self.analyzer, all_matches, seasons, include_private
-        )
-        
-        self.stats_text.insert('1.0', text)
+        # Use RichTextPresenter to generate modern best times analysis
+        self.rich_text_presenter.render_best_times(self.stats_text, self.analyzer, all_matches, seasons)
     
     def _on_chart_option_change(self):
         """Handle chart option checkbox changes - refresh current chart"""
@@ -621,7 +628,7 @@ class MCSRStatsUI:
     def _clear_display(self):
         """Clear all display areas"""
         # Clear text areas
-        self.stats_text.delete(1.0, tk.END)
+        self.stats_text.clear()
         
         # Clear chart
         self.chart_builder.clear()

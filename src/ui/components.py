@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
+from .widgets.rich_text_widget import RichTextWidget
 
 
 class TopBar:
@@ -202,9 +203,8 @@ class MainContent:
         self.ui.stats_frame = ttk.Frame(self.ui.notebook, padding=10)
         self.ui.notebook.add(self.ui.stats_frame, text="Statistics")
         
-        # Create text widget for stats
-        self.ui.stats_text = tk.Text(self.ui.stats_frame, wrap=tk.WORD, font=('Consolas', 10), 
-                                      bg='#1e1e1e', fg='#d4d4d4', insertbackground='white')
+        # Create rich text widget for stats
+        self.ui.stats_text = RichTextWidget(self.ui.stats_frame, theme="dark")
         stats_scroll = ttk.Scrollbar(self.ui.stats_frame, orient=tk.VERTICAL, command=self.ui.stats_text.yview)
         self.ui.stats_text.configure(yscrollcommand=stats_scroll.set)
         stats_scroll.pack(side=tk.RIGHT, fill=tk.Y)

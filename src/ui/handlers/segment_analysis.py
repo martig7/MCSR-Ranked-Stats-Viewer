@@ -35,7 +35,7 @@ class SegmentAnalyzer:
         """Show segment analysis in text tab"""
         self.ui._current_view = 'segments'
         self.ui.notebook.select(0)  # Stats tab
-        self.ui.stats_text.delete('1.0', tk.END)
+        self.ui.stats_text.clear()
         
         if not self.ui.analyzer:
             return
@@ -76,13 +76,17 @@ class SegmentAnalyzer:
             )
             
             text = self.ui.text_presenter.format_side_by_side_text(main_text, comparison_text)
+            self.ui.stats_text.add_text(text, ['monospace'])
+            self.ui.stats_text.finalize()
+            return
         else:
             # Use TextPresenter to generate segment analysis
             text = self.ui.text_presenter.generate_segment_analysis_text(
                 self.ui.analyzer, filtered_matches, segment_stats, split_stats, filter_text
             )
         
-        self.ui.stats_text.insert('1.0', text)
+        self.ui.stats_text.add_text(text, ['monospace'])
+        self.ui.stats_text.finalize()
     
     def show_segment_progression(self):
         """Show segment progression over time with individual charts"""
