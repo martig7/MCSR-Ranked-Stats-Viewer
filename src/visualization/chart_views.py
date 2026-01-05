@@ -56,7 +56,8 @@ class ProgressionChart(ChartViewBase):
         if not self._check_analyzer():
             return
             
-        completed = sorted([m for m in self.ui._get_filtered_matches() if not m.forfeited], 
+        completed = sorted([m for m in self.ui._get_filtered_matches() 
+                           if not m.forfeited and m.match_time is not None], 
                           key=lambda x: x.date)
         
         if len(completed) < 10:
@@ -93,7 +94,8 @@ class ProgressionChart(ChartViewBase):
     def _show_comparison_chart(self, cb, ax, x_data, times, completed, x_label, use_match_numbers):
         """Show progression chart with comparison player"""
         # Get comparison data with same filtering as main player
-        comp_completed = sorted([m for m in self.ui._get_filtered_comparison_matches() if not m.forfeited], 
+        comp_completed = sorted([m for m in self.ui._get_filtered_comparison_matches() 
+                                if not m.forfeited and m.match_time is not None], 
                               key=lambda x: x.date)
         
         if len(comp_completed) < 10:
@@ -147,6 +149,17 @@ class ProgressionChart(ChartViewBase):
                                   label=f'{self.ui.comparison_analyzer.username} avg',
                                   is_comparison=True)
         
+        # Rolling median (if enabled)
+        if self.ui.chart_options['show_rolling_median']:
+            cb.add_rolling_median(ax, x_data, times, window=window, 
+                                 color=main_color,
+                                 label=f'{self.ui.analyzer.username} median',
+                                 is_comparison=False)
+            cb.add_rolling_median(ax, comp_x_data, comp_times, window=window,
+                                 color=comp_color,
+                                 label=f'{self.ui.comparison_analyzer.username} median',
+                                 is_comparison=True)
+        
         # PB lines (if enabled)
         if self.ui.chart_options['show_pb_line']:
             cb.add_pb_line(ax, x_data, times, color=main_color, 
@@ -191,6 +204,13 @@ class ProgressionChart(ChartViewBase):
             cb.add_rolling_average(ax, x_data, times, window=window, 
                                   label=f'{window}-match average',
                                   is_comparison=False)
+        
+        # Rolling median (if enabled)
+        if self.ui.chart_options['show_rolling_median']:
+            window = self.ui.chart_options['rolling_window']
+            cb.add_rolling_median(ax, x_data, times, window=window, 
+                                 label=f'{window}-match median',
+                                 is_comparison=False)
         
         # PB line (if enabled)
         if self.ui.chart_options['show_pb_line']:
@@ -576,7 +596,8 @@ class DistributionChart(ChartViewBase):
         if not self._check_analyzer():
             return
             
-        completed = [m for m in self.ui._get_filtered_matches() if not m.forfeited]
+        completed = [m for m in self.ui._get_filtered_matches() 
+                    if not m.forfeited and m.match_time is not None]
         
         if len(completed) < 10:
             messagebox.showinfo("Info", "Need at least 10 matches for distribution analysis")

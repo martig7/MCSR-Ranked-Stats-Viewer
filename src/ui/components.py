@@ -300,6 +300,15 @@ class MainContent:
         )
         self.ui.rolling_check.pack(side=tk.RIGHT, padx=5)
         
+        self.ui.show_rolling_median_var = tk.BooleanVar(value=False)
+        self.ui.rolling_median_check = ttk.Checkbutton(
+            self.ui.chart_options_frame,
+            text="Rolling Median",
+            variable=self.ui.show_rolling_median_var,
+            command=self.ui._on_chart_option_change
+        )
+        self.ui.rolling_median_check.pack(side=tk.RIGHT, padx=5)
+        
         self.ui.show_std_var = tk.BooleanVar(value=False)
         self.ui.std_check = ttk.Checkbutton(
             self.ui.chart_options_frame,

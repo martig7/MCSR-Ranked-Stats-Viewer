@@ -51,6 +51,7 @@ class MCSRStatsUI:
         self.chart_options = {
             'rolling_window': 10,
             'show_rolling_avg': True,
+            'show_rolling_median': False,
             'show_rolling_std': False,
             'show_pb_line': True,
             'show_grid': True,
@@ -523,6 +524,7 @@ class MCSRStatsUI:
         """Handle chart option checkbox changes - refresh current chart"""
         # Update chart_options from UI
         self.chart_options['show_rolling_avg'] = self.show_rolling_var.get()
+        self.chart_options['show_rolling_median'] = self.show_rolling_median_var.get()
         self.chart_options['show_rolling_std'] = self.show_std_var.get()
         self.chart_options['show_pb_line'] = self.show_pb_var.get()
         self.chart_options['show_grid'] = self.show_grid_var.get()
@@ -569,6 +571,7 @@ class MCSRStatsUI:
             
             # Update quick toggle checkboxes
             self.show_rolling_var.set(options['show_rolling_avg'])
+            self.show_rolling_median_var.set(options['show_rolling_median'])
             self.show_std_var.set(options['show_rolling_std'])
             self.show_pb_var.set(options['show_pb_line'])
             self.show_grid_var.set(options['show_grid'])

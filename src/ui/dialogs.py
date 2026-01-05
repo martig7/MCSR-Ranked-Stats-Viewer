@@ -189,7 +189,7 @@ class ChartOptionsDialog:
     
     def __init__(self, parent: tk.Tk, chart_options: Dict[str, Any],
                  palettes: List[str], on_apply: Callable[[Dict[str, Any]], None],
-                 size: tuple = (400, 375)):
+                 size: tuple = (450, 400)):
         """
         Initialize the chart options dialog.
         
@@ -261,21 +261,25 @@ class ChartOptionsDialog:
         ttk.Checkbutton(main_frame, text="Show Rolling Average", variable=self.show_rolling).grid(
             row=6, column=0, columnspan=2, sticky='w', pady=2)
         
+        self.show_rolling_median = tk.BooleanVar(value=self.chart_options['show_rolling_median'])
+        ttk.Checkbutton(main_frame, text="Show Rolling Median", variable=self.show_rolling_median).grid(
+            row=7, column=0, columnspan=2, sticky='w', pady=2)
+        
         self.show_std = tk.BooleanVar(value=self.chart_options['show_rolling_std'])
         ttk.Checkbutton(main_frame, text="Show Rolling Std Dev (±1σ bands)", variable=self.show_std).grid(
-            row=7, column=0, columnspan=2, sticky='w', pady=2)
+            row=8, column=0, columnspan=2, sticky='w', pady=2)
         
         self.show_pb = tk.BooleanVar(value=self.chart_options['show_pb_line'])
         ttk.Checkbutton(main_frame, text="Show PB Progression Line", variable=self.show_pb).grid(
-            row=8, column=0, columnspan=2, sticky='w', pady=2)
+            row=9, column=0, columnspan=2, sticky='w', pady=2)
         
         self.show_grid = tk.BooleanVar(value=self.chart_options['show_grid'])
         ttk.Checkbutton(main_frame, text="Show Grid", variable=self.show_grid).grid(
-            row=9, column=0, columnspan=2, sticky='w', pady=2)
+            row=10, column=0, columnspan=2, sticky='w', pady=2)
         
         # Buttons
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=10, column=0, columnspan=2, pady=20)
+        button_frame.grid(row=11, column=0, columnspan=2, pady=20)
         
         ttk.Button(button_frame, text="Apply", command=self._apply).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Reset Defaults", command=self._reset_defaults).pack(side=tk.LEFT, padx=5)
@@ -289,6 +293,7 @@ class ChartOptionsDialog:
             'line_width': self.line_var.get(),
             'color_palette': self.palette_var.get(),
             'show_rolling_avg': self.show_rolling.get(),
+            'show_rolling_median': self.show_rolling_median.get(),
             'show_rolling_std': self.show_std.get(),
             'show_pb_line': self.show_pb.get(),
             'show_grid': self.show_grid.get(),
@@ -302,6 +307,7 @@ class ChartOptionsDialog:
         self.line_var.set(2)
         self.palette_var.set('default')
         self.show_rolling.set(True)
+        self.show_rolling_median.set(False)
         self.show_std.set(False)
         self.show_pb.set(True)
         self.show_grid.set(True)

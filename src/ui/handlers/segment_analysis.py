@@ -109,8 +109,8 @@ class SegmentAnalyzer:
         filtered_matches = self.ui._get_all_filtered_matches()
         detailed_matches = [m for m in filtered_matches if m.has_detailed_data]
         
-        # Also get all unfiltered matches for rolling average calculation
-        all_detailed_matches = [m for m in self.ui.analyzer.matches if m.has_detailed_data]
+        # Use same filtered data for rolling average calculation to ensure consistency
+        all_detailed_matches = detailed_matches
         
         if len(detailed_matches) < 5:
             messagebox.showinfo("Info", "Need at least 5 matches with segment data for progression analysis.\n\nClick 'Fetch Segment Data' to download timeline data.")
@@ -195,7 +195,7 @@ class SegmentAnalyzer:
                     dates.append(match.datetime_obj)
                     matches.append(match)
             
-            # Collect full unfiltered data (for rolling calculations)
+            # Collect full filtered data (for rolling calculations)
             full_times = []
             full_dates = []
             for match in all_detailed_matches:
@@ -376,6 +376,14 @@ class SegmentAnalyzer:
                                       full_x_data=full_x_data, full_y_data=full_times,
                                       is_comparison=False)
             
+            # Rolling median (if enabled)
+            if self.ui.chart_options['show_rolling_median'] and len(times) >= 1:
+                window = self.ui.chart_options['rolling_window']
+                cb.add_rolling_median(ax, x_data, times, 
+                                     window=window, label=None, color_index=main_line_color_idx + 1,
+                                     full_x_data=full_x_data, full_y_data=full_times,
+                                     is_comparison=False)
+            
             # PB line (if enabled)
             if self.ui.chart_options['show_pb_line']:
                 cb.add_pb_line(ax, x_data, times, label=None, color_index=main_line_color_idx)
@@ -410,6 +418,14 @@ class SegmentAnalyzer:
                                           window=comp_window, label=None, color_index=comp_line_color_idx,
                                           full_x_data=comp_full_x_data, full_y_data=comp_full_times,
                                           is_comparison=True)
+                
+                # Comparison rolling median (if enabled)
+                if self.ui.chart_options['show_rolling_median'] and len(comp_times) >= 1:
+                    comp_window = self.ui.chart_options['rolling_window']
+                    cb.add_rolling_median(ax, comp_x_data, comp_times, 
+                                         window=comp_window, label=None, color_index=comp_line_color_idx + 1,
+                                         full_x_data=comp_full_x_data, full_y_data=comp_full_times,
+                                         is_comparison=True)
                 
                 # Comparison PB line (if enabled)
                 if self.ui.chart_options['show_pb_line']:
@@ -649,6 +665,15 @@ class SegmentAnalyzer:
                                   label=f'{window}-match average',
                                   full_x_data=full_x_data, full_y_data=full_times,
                                   is_comparison=False)
+        
+        # Rolling median (if enabled)
+        if self.ui.chart_options['show_rolling_median'] and len(times) >= 1:
+            window = self.ui.chart_options['rolling_window']
+            cb.add_rolling_median(ax, x_data, times, 
+                                 window=window, color_index=main_line_color_idx + 1,
+                                 label=f'{window}-match median',
+                                 full_x_data=full_x_data, full_y_data=full_times,
+                                 is_comparison=False)
             
             # Add comparison player rolling average if available
             if comp_times and comp_dates and len(comp_times) >= 1:
@@ -664,6 +689,21 @@ class SegmentAnalyzer:
                                       label=f'Comp {comp_window}-match avg',
                                       full_x_data=comp_full_x_data, full_y_data=comp_full_times,
                                       is_comparison=True)
+            
+            # Add comparison player rolling median if available
+            if comp_times and comp_dates and len(comp_times) >= 1:
+                comp_window = self.ui.chart_options['rolling_window']
+                # Use same comparison full x-axis data as calculated above
+                if use_match_numbers:
+                    comp_full_x_data = list(range(1, len(comp_full_times) + 1))
+                else:
+                    comp_full_x_data = comp_full_dates
+                    
+                cb.add_rolling_median(ax, comp_x_data, comp_times, 
+                                     window=comp_window, color_index=comp_line_color_idx + 1,
+                                     label=f'Comp {comp_window}-match median',
+                                     full_x_data=comp_full_x_data, full_y_data=comp_full_times,
+                                     is_comparison=True)
         
         # PB line (if enabled)
         if self.ui.chart_options['show_pb_line']:
