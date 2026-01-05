@@ -3,12 +3,12 @@ Data loading and management for MCSR Stats UI.
 Handles background data fetching and state updates.
 """
 
-import threading
 from tkinter import messagebox
 from ...core.analyzer import MCSRAnalyzer
+from ...utils.base_thread_handler import BaseThreadHandler
 
 
-class DataLoader:
+class DataLoader(BaseThreadHandler):
     """Manages data loading operations with background threading"""
     
     def __init__(self, ui_context):
@@ -18,7 +18,7 @@ class DataLoader:
         Args:
             ui_context: Reference to main UI (MCSRStatsUI instance)
         """
-        self.ui = ui_context
+        super().__init__(ui_context)
     
     def load_from_cache(self):
         """Load data from cache"""
@@ -30,21 +30,17 @@ class DataLoader:
         self.ui._set_status(f"Loading data for {username}...")
         self.ui._show_loading_progress("Loading from cache...")
         
-        def load_thread():
-            try:
-                self.ui.analyzer = MCSRAnalyzer(username)
-                
-                def progress_update(message):
-                    self.ui.root.after(0, lambda msg=message: self.ui._update_loading_progress(msg))
-                
-                self.ui.analyzer.fetch_all_matches(use_cache=True, progress_callback=progress_update)
-                self.ui.root.after(0, self._on_data_loaded)
-            except Exception as e:
-                error_msg = str(e)
-                self.ui.root.after(0, lambda: self._on_load_error(error_msg))
-                
-        thread = threading.Thread(target=load_thread, daemon=True)
-        thread.start()
+        def work_func(progress_callback):
+            self.ui.analyzer = MCSRAnalyzer(username)
+            self.ui.analyzer.fetch_all_matches(use_cache=True, progress_callback=progress_callback)
+            return True  # Success indicator
+        
+        self.execute_with_progress(
+            f"Loading data for {username}...",
+            work_func,
+            lambda result: self._on_data_loaded(),
+            self._on_load_error
+        )
         
     def refresh_from_api(self):
         """Fetch fresh data from API"""
@@ -56,21 +52,17 @@ class DataLoader:
         self.ui._set_status(f"Fetching data from API for {username}...")
         self.ui._show_loading_progress("Fetching from API...")
         
-        def refresh_thread():
-            try:
-                self.ui.analyzer = MCSRAnalyzer(username)
-                
-                def progress_update(message):
-                    self.ui.root.after(0, lambda msg=message: self.ui._update_loading_progress(msg))
-                
-                self.ui.analyzer.fetch_all_matches(use_cache=False, progress_callback=progress_update)
-                self.ui.root.after(0, self._on_data_loaded)
-            except Exception as e:
-                error_msg = str(e)
-                self.ui.root.after(0, lambda: self._on_load_error(error_msg))
-                
-        thread = threading.Thread(target=refresh_thread, daemon=True)
-        thread.start()
+        def work_func(progress_callback):
+            self.ui.analyzer = MCSRAnalyzer(username)
+            self.ui.analyzer.fetch_all_matches(use_cache=False, progress_callback=progress_callback)
+            return True  # Success indicator
+        
+        self.execute_with_progress(
+            f"Fetching data from API for {username}...",
+            work_func,
+            lambda result: self._on_data_loaded(),
+            self._on_load_error
+        )
         
     def fetch_segments(self):
         """Fetch detailed segment data for next batch of matches"""
@@ -81,19 +73,18 @@ class DataLoader:
         self.ui._set_status("Fetching segment data...")
         self.ui._show_loading_progress("Preparing segment fetch...")
         
-        def fetch_thread():
-            try:
-                def progress_update(message):
-                    self.ui.root.after(0, lambda msg=message: self.ui._update_loading_progress(msg))
-                
-                fetched_count = self.ui.analyzer.fetch_segment_data(max_matches=100, force_refresh=False, progress_callback=progress_update)
-                self.ui.root.after(0, lambda: self._on_segments_loaded(fetched_count))
-            except Exception as e:
-                error_msg = str(e)
-                self.ui.root.after(0, lambda: self._on_load_error(error_msg))
-                
-        thread = threading.Thread(target=fetch_thread, daemon=True)
-        thread.start()
+        def work_func(progress_callback):
+            fetched_count = self.ui.analyzer.fetch_segment_data(
+                max_matches=100, force_refresh=False, progress_callback=progress_callback
+            )
+            return fetched_count
+        
+        self.execute_with_progress(
+            "Fetching segment data...",
+            work_func,
+            lambda fetched_count: self._on_segments_loaded(fetched_count),
+            self._on_load_error
+        )
     
     def clear_basic_data(self):
         """Clear basic match data only"""

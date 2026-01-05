@@ -8,6 +8,7 @@ from datetime import datetime
 import statistics
 
 from ..ui.widgets.rich_text_widget import RichTextWidget
+from ..utils.time_formatting import format_time_ms_to_string, format_minutes_to_string
 
 
 class TextComponent:
@@ -345,11 +346,7 @@ class SegmentAnalysisComponent(TextComponent):
     
     def _format_time_ms(self, milliseconds: Optional[int]) -> str:
         """Format milliseconds to MM:SS.mmm."""
-        if milliseconds is None:
-            return "N/A"
-        seconds = milliseconds / 1000
-        minutes, sec_remainder = divmod(seconds, 60)
-        return f'{int(minutes)}:{int(sec_remainder):02d}.{int(milliseconds % 1000):03d}'
+        return format_time_ms_to_string(milliseconds)
 
 
 class MatchDetailComponent(TextComponent):
@@ -468,11 +465,7 @@ class MatchDetailComponent(TextComponent):
     
     def _format_time_ms(self, milliseconds: Optional[int]) -> str:
         """Format milliseconds to MM:SS.mmm."""
-        if milliseconds is None:
-            return "N/A"
-        seconds = milliseconds / 1000
-        minutes, sec_remainder = divmod(seconds, 60)
-        return f'{int(minutes)}:{int(sec_remainder):02d}.{int(milliseconds % 1000):03d}'
+        return format_time_ms_to_string(milliseconds)
 
 
 class RichTextPresenter:
@@ -484,19 +477,11 @@ class RichTextPresenter:
     
     def format_time_ms_to_string(self, milliseconds: Optional[int]) -> str:
         """Convert milliseconds to MM:SS.mmm format."""
-        if milliseconds is None:
-            return "N/A"
-        seconds = milliseconds / 1000
-        minutes, sec_remainder = divmod(seconds, 60)
-        return f'{int(minutes)}:{int(sec_remainder):02d}.{int(milliseconds % 1000):03d}'
+        return format_time_ms_to_string(milliseconds)
     
     def format_minutes_to_string(self, minutes: Optional[float]) -> str:
         """Convert decimal minutes to 'Xm Ys' format."""
-        if minutes is None:
-            return "N/A"
-        m = int(minutes)
-        s = int((minutes - m) * 60)
-        return f'{m}m {s}s'
+        return format_minutes_to_string(minutes)
     
     def render_welcome(self, widget: RichTextWidget):
         """Render welcome message using components."""

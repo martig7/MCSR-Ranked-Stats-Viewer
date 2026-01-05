@@ -4,17 +4,14 @@ A graphical interface for browsing MCSR Ranked speedrun statistics.
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from matplotlib.figure import Figure
-import statistics
 from datetime import datetime
-import threading
 from typing import List, Dict, Any, Optional
 
 from ..core.analyzer import MCSRAnalyzer
-from ..visualization.chart_builder import ChartBuilder, ChartType, SeriesConfig, ChartConfig, FigureConfig
+from ..visualization.chart_builder import ChartBuilder
 from ..visualization.text_presenter import TextPresenter
 from ..visualization.rich_text_presenter import RichTextPresenter
 from .dialogs import FiltersDialog, ChartOptionsDialog
@@ -23,6 +20,7 @@ from ..visualization.chart_views import ChartViewManager
 from .handlers.comparison_handler import ComparisonHandler
 from .handlers.data_loader import DataLoader
 from .components import TopBar, Sidebar, MainContent, StatusBar
+from ..utils.filter_manager import FilterManager
 
 
 class MCSRStatsUI:
@@ -38,6 +36,7 @@ class MCSRStatsUI:
         self.chart_builder = None  # Initialized after figure is created
         self.text_presenter = TextPresenter()  # Legacy text formatting and generation
         self.rich_text_presenter = RichTextPresenter()  # Modern text formatting and generation
+        self.filter_manager = None  # Initialized after UI setup to avoid circular dependencies
         self.segment_analyzer = None  # Initialized after UI setup to avoid circular dependencies
         self.chart_views = None  # Initialized after UI setup to avoid circular dependencies
         
@@ -102,6 +101,7 @@ class MCSRStatsUI:
         
         # Initialize handlers after UI components are created
         self.chart_builder = ChartBuilder(self.fig, self.canvas)
+        self.filter_manager = FilterManager(self)
         self.segment_analyzer = SegmentAnalyzer(self)
         self.chart_views = ChartViewManager(self)
         self.comparison_handler = ComparisonHandler(self)
@@ -188,19 +188,16 @@ class MCSRStatsUI:
             # All matches mode - need to identify user
             kwargs['require_user_identified'] = True
         
-        return kwargs
+        # Note: This method now delegates to FilterManager for consistency
+        return self.filter_manager.build_filter_kwargs(completed_only)
     
     def _get_filtered_matches(self):
         """Get completed matches (user's wins) filtered by current UI filters"""
-        if not self.analyzer:
-            return []
-        return self.analyzer.filter_matches(**self._build_filter_kwargs(completed_only=True))
+        return self.filter_manager.get_filtered_matches(self.analyzer, completed_only=True)
     
     def _get_all_filtered_matches(self):
         """Get all matches (wins/losses/draws) filtered by current UI filters"""
-        if not self.analyzer:
-            return []
-        return self.analyzer.filter_matches(**self._build_filter_kwargs(completed_only=False))
+        return self.filter_manager.get_all_filtered_matches(self.analyzer)
         
     def _update_display(self):
         """Update display when filter changes"""

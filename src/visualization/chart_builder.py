@@ -159,6 +159,8 @@ class ChartBuilder:
         self.click_callbacks = {}
         self.rolling_avg_data = {}
         self.comparison_rolling_avg_data = {}
+        self.rolling_median_data = {}
+        self.comparison_rolling_median_data = {}
         self.hover_tooltip = None
         self.hover_line = None
         return self
@@ -283,27 +285,30 @@ class ChartBuilder:
         ax.plot(x_data, y_data, color=color, linewidth=linewidth, alpha=line_alpha)
         return self
         
-    def add_rolling_average(self, ax: plt.Axes, x_data, y_data,
-                            window: int = 10, color: str = None,
-                            linewidth: float = 2, alpha: float = 0.8,
-                            label: str = None, color_index: int = 1,
-                            full_x_data=None, full_y_data=None,
-                            is_comparison=False):
-        """Add a rolling average line to the chart
+    def _calculate_rolling_stats(self, ax: plt.Axes, x_data, y_data,
+                                window: int, stat_func, color: str = None,
+                                linewidth: float = 2, alpha: float = 0.8,
+                                label: str = None, color_index: int = 1,
+                                full_x_data=None, full_y_data=None,
+                                is_comparison=False, data_storage_key: str = None):
+        """
+        Unified rolling statistics calculation with shared datetime/numeric handling.
         
         Args:
             ax: The matplotlib axes to plot on
             x_data: X values for the visible portion
             y_data: Y values for the visible portion  
             window: Rolling window size
+            stat_func: Statistical function (statistics.mean, statistics.median, etc.)
             color: Line color
             linewidth: Line width
             alpha: Line transparency
             label: Legend label
             color_index: Color palette index
-            full_x_data: Complete X dataset (for calculating rolling avg with historical data)
-            full_y_data: Complete Y dataset (for calculating rolling avg with historical data)
+            full_x_data: Complete X dataset for calculation
+            full_y_data: Complete Y dataset for calculation
             is_comparison: Whether this is comparison player data
+            data_storage_key: Key for storing data (e.g., 'rolling_avg_data', 'rolling_median_data')
         """
         if len(y_data) < 1:
             return self
@@ -317,87 +322,90 @@ class ChartBuilder:
         if len(calc_y) < window and full_y_data is None:
             return self
             
-        rolling_avg = []
+        rolling_values = []
         rolling_x = []
         
-        # Calculate rolling average using full dataset
+        # Calculate rolling statistics using full dataset
         for i in range(len(calc_y)):
             # Use available data if less than window size
             start_idx = max(0, i - window + 1)
             window_data = calc_y[start_idx:i+1]
             
             if len(window_data) >= 1:  # At least one point
-                rolling_avg.append(statistics.mean(window_data))
+                rolling_values.append(stat_func(window_data))
                 rolling_x.append(calc_x[i])
         
         # If using full dataset, filter to only show the visible range
         if full_x_data is not None and full_y_data is not None:
-            # Find indices that correspond to the visible x_data range
-            if len(x_data) > 0:
-                visible_start = x_data[0]
-                visible_end = x_data[-1]
-                
-                # Handle datetime comparison properly
-                if hasattr(visible_start, 'timestamp'):
-                    # Convert to timestamps for reliable comparison
-                    visible_start_ts = visible_start.timestamp()
-                    visible_end_ts = visible_end.timestamp()
-                    
-                    # Filter rolling average to visible range
-                    filtered_avg = []
-                    filtered_x = []
-                    for i, x_val in enumerate(rolling_x):
-                        x_val_ts = x_val.timestamp() if hasattr(x_val, 'timestamp') else x_val
-                        if visible_start_ts <= x_val_ts <= visible_end_ts:
-                            filtered_avg.append(rolling_avg[i])
-                            filtered_x.append(x_val)
-                else:
-                    # Numeric comparison
-                    filtered_avg = []
-                    filtered_x = []
-                    for i, x_val in enumerate(rolling_x):
-                        if visible_start <= x_val <= visible_end:
-                            filtered_avg.append(rolling_avg[i])
-                            filtered_x.append(x_val)
-                
-                rolling_avg = filtered_avg
-                rolling_x = filtered_x
-        
-        if rolling_avg and rolling_x:
-            # Ensure data is sorted by x values before plotting
-            if len(rolling_x) > 1:
-                # Create list of (x, y) pairs and sort by x
-                pairs = list(zip(rolling_x, rolling_avg))
-                if hasattr(rolling_x[0], 'timestamp'):
-                    # Sort datetime objects
-                    pairs.sort(key=lambda p: p[0])
-                else:
-                    # Sort numeric values
-                    pairs.sort(key=lambda p: p[0])
-                rolling_x, rolling_avg = zip(*pairs)
+            filtered_values = []
+            filtered_x = []
             
-            label = label or f'{window}-point average'
-            ax.plot(rolling_x, rolling_avg, color=color, linewidth=linewidth,
-                   alpha=alpha, label=label)
-            
-            # Store rolling average data for hover tooltips
-            if ax not in self.rolling_avg_data:
-                self.rolling_avg_data[ax] = []
-            
-            # Store as (x, y) tuples for hover interpolation
-            rolling_data = list(zip(rolling_x, rolling_avg))
-            
-            # Store based on explicit comparison flag
-            if is_comparison:
-                if ax not in self.comparison_rolling_avg_data:
-                    self.comparison_rolling_avg_data[ax] = []
-                self.comparison_rolling_avg_data[ax] = rolling_data
+            if hasattr(x_data[0], 'timestamp') if x_data else False:
+                # Date filtering for datetime x_data
+                min_x = min(x_data)
+                max_x = max(x_data)
+                for i, x_val in enumerate(rolling_x):
+                    if min_x <= x_val <= max_x:
+                        filtered_x.append(x_val)
+                        filtered_values.append(rolling_values[i])
             else:
-                if ax not in self.rolling_avg_data:
-                    self.rolling_avg_data[ax] = []
-                self.rolling_avg_data[ax] = rolling_data
-        
+                # Numeric filtering for numeric x_data
+                for i, x_val in enumerate(rolling_x):
+                    if x_val in x_data:  # Only show points that are in visible data
+                        filtered_x.append(x_val)
+                        filtered_values.append(rolling_values[i])
+            
+            rolling_values = filtered_values
+            rolling_x = filtered_x
+
+        if rolling_values and rolling_x:
+            # Sort by x values to ensure proper line plotting
+            if len(rolling_x) > 1:
+                # Create pairs and sort
+                pairs = list(zip(rolling_x, rolling_values))
+                if hasattr(rolling_x[0], 'timestamp'):
+                    # Sort by timestamp for datetime objects
+                    pairs.sort(key=lambda p: p[0].timestamp())
+                else:
+                    # Sort by value for numeric data
+                    pairs.sort(key=lambda p: p[0])
+                rolling_x, rolling_values = zip(*pairs)
+
+            # Plot the rolling statistics line
+            ax.plot(rolling_x, rolling_values, color=color, linewidth=linewidth,
+                   alpha=alpha, label=label)
+
+            # Store rolling data for hover tooltips if data_storage_key provided
+            if data_storage_key:
+                rolling_data = list(zip(rolling_x, rolling_values))
+                
+                if is_comparison:
+                    comparison_dict = getattr(self, f"comparison_{data_storage_key}")
+                    if ax not in comparison_dict:
+                        comparison_dict[ax] = []
+                    comparison_dict[ax] = rolling_data
+                else:
+                    storage_dict = getattr(self, data_storage_key)
+                    if ax not in storage_dict:
+                        storage_dict[ax] = []
+                    storage_dict[ax] = rolling_data
+
         return self
+        
+    def add_rolling_average(self, ax: plt.Axes, x_data, y_data,
+                            window: int = 10, color: str = None,
+                            linewidth: float = 2, alpha: float = 0.8,
+                            label: str = None, color_index: int = 1,
+                            full_x_data=None, full_y_data=None,
+                            is_comparison=False):
+        """Add a rolling average line to the chart using shared calculation logic."""
+        import statistics
+        label = label or f'{window}-point average'
+        return self._calculate_rolling_stats(
+            ax, x_data, y_data, window, statistics.mean, color,
+            linewidth, alpha, label, color_index, full_x_data, full_y_data,
+            is_comparison, 'rolling_avg_data'
+        )
     
     def add_rolling_median(self, ax: plt.Axes, x_data, y_data,
                           window: int = 10, color: str = None,
@@ -405,115 +413,14 @@ class ChartBuilder:
                           label: str = None, color_index: int = 3,
                           full_x_data=None, full_y_data=None,
                           is_comparison=False):
-        """Add a rolling median line to the chart
-        
-        Args:
-            ax: The matplotlib axes to plot on
-            x_data: X values for the visible portion
-            y_data: Y values for the visible portion  
-            window: Rolling window size
-            color: Line color
-            linewidth: Line width
-            alpha: Line transparency
-            label: Legend label
-            color_index: Color palette index
-            full_x_data: Complete X dataset (for calculating rolling median with historical data)
-            full_y_data: Complete Y dataset (for calculating rolling median with historical data)
-            is_comparison: Whether this is comparison player data
-        """
-        if len(y_data) < 1:
-            return self
-        
-        color = color or self.get_color(color_index)
-        
-        # Use full dataset for calculation if provided, otherwise use visible data
-        calc_x = full_x_data if full_x_data is not None else x_data
-        calc_y = full_y_data if full_y_data is not None else y_data
-        
-        if len(calc_y) < window and full_y_data is None:
-            return self
-            
-        rolling_median = []
-        rolling_x = []
-        
-        # Calculate rolling median using full dataset
-        for i in range(len(calc_y)):
-            # Use available data if less than window size
-            start_idx = max(0, i - window + 1)
-            window_data = calc_y[start_idx:i+1]
-            
-            if len(window_data) >= 1:  # At least one point
-                rolling_median.append(statistics.median(window_data))
-                rolling_x.append(calc_x[i])
-        
-        # If using full dataset, filter to only show the visible range
-        if full_x_data is not None and full_y_data is not None:
-            # Find indices that correspond to the visible x_data range
-            if len(x_data) > 0:
-                visible_start = x_data[0]
-                visible_end = x_data[-1]
-                
-                # Handle datetime comparison properly
-                if hasattr(visible_start, 'timestamp'):
-                    # Convert to timestamps for reliable comparison
-                    visible_start_ts = visible_start.timestamp()
-                    visible_end_ts = visible_end.timestamp()
-                    
-                    # Filter rolling median to visible range
-                    filtered_median = []
-                    filtered_x = []
-                    for i, x_val in enumerate(rolling_x):
-                        x_val_ts = x_val.timestamp() if hasattr(x_val, 'timestamp') else x_val
-                        if visible_start_ts <= x_val_ts <= visible_end_ts:
-                            filtered_median.append(rolling_median[i])
-                            filtered_x.append(x_val)
-                else:
-                    # Numeric comparison
-                    filtered_median = []
-                    filtered_x = []
-                    for i, x_val in enumerate(rolling_x):
-                        if visible_start <= x_val <= visible_end:
-                            filtered_median.append(rolling_median[i])
-                            filtered_x.append(x_val)
-                
-                rolling_median = filtered_median
-                rolling_x = filtered_x
-        
-        if rolling_median and rolling_x:
-            # Ensure data is sorted by x values before plotting
-            if len(rolling_x) > 1:
-                # Create list of (x, y) pairs and sort by x
-                pairs = list(zip(rolling_x, rolling_median))
-                if hasattr(rolling_x[0], 'timestamp'):
-                    # Sort datetime objects
-                    pairs.sort(key=lambda p: p[0])
-                else:
-                    # Sort numeric values
-                    pairs.sort(key=lambda p: p[0])
-                rolling_x, rolling_median = zip(*pairs)
-            
-            label = label or f'{window}-point median'
-            ax.plot(rolling_x, rolling_median, color=color, linewidth=linewidth,
-                   alpha=alpha, label=label, linestyle='--')  # Use dashed line to distinguish from average
-            
-            # Store rolling median data for hover tooltips
-            if ax not in self.rolling_median_data:
-                self.rolling_median_data[ax] = []
-            
-            # Store as (x, y) tuples for hover interpolation
-            rolling_data = list(zip(rolling_x, rolling_median))
-            
-            # Store based on explicit comparison flag
-            if is_comparison:
-                if ax not in self.comparison_rolling_median_data:
-                    self.comparison_rolling_median_data[ax] = []
-                self.comparison_rolling_median_data[ax] = rolling_data
-            else:
-                if ax not in self.rolling_median_data:
-                    self.rolling_median_data[ax] = []
-                self.rolling_median_data[ax] = rolling_data
-        
-        return self
+        """Add a rolling median line to the chart using shared calculation logic."""
+        import statistics
+        label = label or f'{window}-point median'
+        return self._calculate_rolling_stats(
+            ax, x_data, y_data, window, statistics.median, color,
+            linewidth, alpha, label, color_index, full_x_data, full_y_data,
+            is_comparison, 'rolling_median_data'
+        )
     
     def add_rolling_std_dev(self, ax: plt.Axes, x_data, y_data,
                            window: int = 10, color: str = None,
@@ -825,8 +732,13 @@ class ChartBuilder:
             
             ax = event.inaxes
             
-            # Check if this axis has rolling average data
-            if ax not in self.rolling_avg_data and ax not in self.comparison_rolling_avg_data:
+            # Check if this axis has any rolling data (average or median)
+            has_rolling_data = (ax in self.rolling_avg_data or 
+                              ax in self.comparison_rolling_avg_data or
+                              ax in self.rolling_median_data or
+                              ax in self.comparison_rolling_median_data)
+            
+            if not has_rolling_data:
                 self._clear_hover_elements()
                 return
             
@@ -846,25 +758,37 @@ class ChartBuilder:
             self._clear_hover_elements()
     
     def _find_hover_info(self, ax, hover_x):
-        """Find rolling average values at the hover x position"""
+        """Find rolling data values at the hover x position (average or median)"""
         hover_info = {}
         
-        # Check main player rolling average
-        if ax in self.rolling_avg_data:
-            main_value = self._interpolate_rolling_avg(self.rolling_avg_data[ax], hover_x)
-            if main_value is not None:
-                hover_info['main'] = main_value
+        # Prioritize the data type that has the most recent data for this axis
+        # This handles the case where both average and median might be stored
+        # but we want to show the one that's currently being displayed
         
-        # Check comparison player rolling average
-        if ax in self.comparison_rolling_avg_data:
-            comp_value = self._interpolate_rolling_avg(self.comparison_rolling_avg_data[ax], hover_x)
-            if comp_value is not None:
-                hover_info['comparison'] = comp_value
+        # Check main player rolling data
+        main_value = None
+        if ax in self.rolling_avg_data and self.rolling_avg_data[ax]:
+            main_value = self._interpolate_rolling_data(self.rolling_avg_data[ax], hover_x)
+        if main_value is None and ax in self.rolling_median_data and self.rolling_median_data[ax]:
+            main_value = self._interpolate_rolling_data(self.rolling_median_data[ax], hover_x)
+        
+        if main_value is not None:
+            hover_info['main'] = main_value
+        
+        # Check comparison player rolling data
+        comp_value = None
+        if ax in self.comparison_rolling_avg_data and self.comparison_rolling_avg_data[ax]:
+            comp_value = self._interpolate_rolling_data(self.comparison_rolling_avg_data[ax], hover_x)
+        if comp_value is None and ax in self.comparison_rolling_median_data and self.comparison_rolling_median_data[ax]:
+            comp_value = self._interpolate_rolling_data(self.comparison_rolling_median_data[ax], hover_x)
+            
+        if comp_value is not None:
+            hover_info['comparison'] = comp_value
         
         return hover_info if hover_info else None
     
-    def _interpolate_rolling_avg(self, rolling_data, hover_x):
-        """Interpolate rolling average value at hover_x position"""
+    def _interpolate_rolling_data(self, rolling_data, hover_x):
+        """Interpolate rolling data value at hover_x position"""
         if not rolling_data:
             return None
         
@@ -922,17 +846,23 @@ class ChartBuilder:
         self.hover_line = ax.axvline(hover_x, color='white', linestyle='--', 
                                     alpha=0.7, linewidth=1)
         
-        # Format tooltip text (no date/x value, only rolling averages)
+        # Format tooltip text (no date/x value, only rolling data)
         tooltip_lines = []
         
-        # Add rolling average values
+        # Determine what type of rolling data is being shown
+        rolling_type = "Avg"  # Default to average
+        if ax in self.rolling_median_data or ax in self.comparison_rolling_median_data:
+            if ax not in self.rolling_avg_data and ax not in self.comparison_rolling_avg_data:
+                rolling_type = "Median"
+        
+        # Add rolling data values
         if 'main' in hover_info:
             formatted_time = self.time_formatter(hover_info['main'])
-            tooltip_lines.append(f"Rolling Avg: {formatted_time}")
+            tooltip_lines.append(f"Rolling {rolling_type}: {formatted_time}")
         
         if 'comparison' in hover_info:
             formatted_time = self.time_formatter(hover_info['comparison'])
-            tooltip_lines.append(f"Comp. Rolling Avg: {formatted_time}")
+            tooltip_lines.append(f"Comp. Rolling {rolling_type}: {formatted_time}")
         
         tooltip_text = '\n'.join(tooltip_lines)
         

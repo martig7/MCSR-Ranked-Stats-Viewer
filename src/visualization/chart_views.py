@@ -12,7 +12,7 @@ from .match_info_dialog import show_match_info_dialog
 
 
 class ChartViewBase:
-    """Base class for chart views with common functionality"""
+    """Base class for chart views with common functionality and template methods"""
     
     def __init__(self, ui_context):
         """
@@ -40,6 +40,173 @@ class ChartViewBase:
     def _check_analyzer(self) -> bool:
         """Check if analyzer exists"""
         return self.ui.analyzer is not None
+    
+    def _setup_chart_builder(self):
+        """Standard ChartBuilder setup pattern used by all chart views"""
+        cb = self.ui.chart_builder
+        cb.clear()
+        cb.set_palette(self.ui.chart_options['color_palette'])
+        return cb
+    
+    def _should_show_comparison(self) -> bool:
+        """Check if comparison mode is active and has valid data"""
+        return (self.ui.comparison_active and 
+                hasattr(self.ui, 'comparison_analyzer') and 
+                self.ui.comparison_analyzer is not None)
+    
+    def _validate_data_minimum(self, data: List, min_count: int, data_type: str) -> bool:
+        """
+        Common data validation pattern with messagebox for insufficient data.
+        
+        Args:
+            data: Data to validate
+            min_count: Minimum required count
+            data_type: Description for error message
+            
+        Returns:
+            True if data meets minimum requirements, False otherwise
+        """
+        if len(data) < min_count:
+            messagebox.showinfo("Insufficient Data", 
+                              f"Need at least {min_count} {data_type} to generate chart.")
+            return False
+        return True
+    
+    def _finalize_chart(self, ax):
+        """Common chart finalization steps"""
+        cb = self.ui.chart_builder
+        cb.set_grid(ax, self.ui.chart_options['show_grid'])
+        if hasattr(cb, 'set_legend'):
+            cb.set_legend(ax)
+        cb.finalize()
+    
+    def show_with_comparison_pattern(self, data_getter_func, single_renderer_func, 
+                                   comparison_renderer_func, min_data_count: int = 1,
+                                   data_type: str = "matches"):
+        """
+        Template method for the common comparison vs single pattern.
+        
+        Args:
+            data_getter_func: Function to get main player data
+            single_renderer_func: Function to render single player chart
+            comparison_renderer_func: Function to render comparison chart
+            min_data_count: Minimum data points required
+            data_type: Type of data for error messages
+        """
+        if not self._check_analyzer():
+            return
+            
+        # Get main player data
+        data = data_getter_func()
+        if not self._validate_data_minimum(data, min_data_count, data_type):
+            return
+            
+        # Setup chart builder
+        cb = self._setup_chart_builder()
+        
+        # Choose rendering path based on comparison mode
+        if self._should_show_comparison():
+            comparison_renderer_func(cb, data)
+        else:
+            single_renderer_func(cb, data)
+    
+    def _get_filter_settings(self) -> Dict[str, Any]:
+        """Get current filter settings for consistent data filtering across chart types"""
+        include_private = self.ui.include_private_var.get()
+        season_filter = self.ui.season_var.get()
+        seed_filter = self.ui.seed_filter_var.get()
+        
+        return {
+            'include_private': include_private,
+            'season_val': int(season_filter) if season_filter != 'All' else None,
+            'seed_val': seed_filter if seed_filter != 'All' else None
+        }
+    
+    def _create_subplot_comparison_chart(self, cb, main_data, comp_data, data_keys, 
+                                       chart_config: Dict[str, Any]):
+        """
+        Shared subplot creation for comparison charts (seasons, seed types, etc.)
+        
+        Args:
+            cb: ChartBuilder instance
+            main_data: Main player data dictionary
+            comp_data: Comparison player data dictionary
+            data_keys: List of keys for x-axis (seasons, seed types, etc.)
+            chart_config: Configuration dict with chart titles and labels
+        """
+        axes = cb.create_subplots(2, 2)
+        ax1, ax2, ax3, ax4 = axes
+        
+        # Prepare data arrays for both players
+        main_metrics = {'avg': [], 'best': [], 'counts': [], 'median': []}
+        comp_metrics = {'avg': [], 'best': [], 'counts': [], 'median': []}
+        
+        for key in data_keys:
+            # Main player data
+            main_season = main_data.get(key, {})
+            main_metrics['avg'].append(main_season.get('avg_time', 0) / 1000 / 60)
+            main_metrics['best'].append(main_season.get('best_time', 0) / 1000 / 60)
+            main_metrics['counts'].append(main_season.get('count', 0))
+            main_metrics['median'].append(main_season.get('median_time', 0) / 1000 / 60)
+            
+            # Comparison player data
+            comp_season = comp_data.get(key, {})
+            comp_metrics['avg'].append(comp_season.get('avg_time', 0) / 1000 / 60)
+            comp_metrics['best'].append(comp_season.get('best_time', 0) / 1000 / 60)
+            comp_metrics['counts'].append(comp_season.get('count', 0))
+            comp_metrics['median'].append(comp_season.get('median_time', 0) / 1000 / 60)
+        
+        # Create the four subplots
+        x_pos = range(len(data_keys))
+        width = 0.35
+        x_main = [x - width/2 for x in x_pos]
+        x_comp = [x + width/2 for x in x_pos]
+        
+        # Plot 1: Average Times
+        ax1.bar(x_main, main_metrics['avg'], width, label=self.ui.analyzer.username, 
+                color=cb.get_color(0), alpha=0.7)
+        ax1.bar(x_comp, comp_metrics['avg'], width, label=self.ui.comparison_analyzer.username,
+                color=cb.get_color(1), alpha=0.7)
+        ax1.set_title(f'{chart_config["avg_title"]}')
+        ax1.set_ylabel('Time (minutes)')
+        ax1.set_xticks(x_pos)
+        ax1.set_xticklabels(data_keys)
+        ax1.legend()
+        
+        # Plot 2: Best Times  
+        ax2.bar(x_main, main_metrics['best'], width, label=self.ui.analyzer.username,
+                color=cb.get_color(0), alpha=0.7)
+        ax2.bar(x_comp, comp_metrics['best'], width, label=self.ui.comparison_analyzer.username,
+                color=cb.get_color(1), alpha=0.7)
+        ax2.set_title(f'{chart_config["best_title"]}')
+        ax2.set_ylabel('Time (minutes)')
+        ax2.set_xticks(x_pos)
+        ax2.set_xticklabels(data_keys)
+        ax2.legend()
+        
+        # Plot 3: Match Counts
+        ax3.bar(x_main, main_metrics['counts'], width, label=self.ui.analyzer.username,
+                color=cb.get_color(0), alpha=0.7)
+        ax3.bar(x_comp, comp_metrics['counts'], width, label=self.ui.comparison_analyzer.username,
+                color=cb.get_color(1), alpha=0.7)
+        ax3.set_title(f'{chart_config["count_title"]}')
+        ax3.set_ylabel('Number of Matches')
+        ax3.set_xticks(x_pos)
+        ax3.set_xticklabels(data_keys)
+        ax3.legend()
+        
+        # Plot 4: Median Times
+        ax4.bar(x_main, main_metrics['median'], width, label=self.ui.analyzer.username,
+                color=cb.get_color(0), alpha=0.7)
+        ax4.bar(x_comp, comp_metrics['median'], width, label=self.ui.comparison_analyzer.username,
+                color=cb.get_color(1), alpha=0.7)
+        ax4.set_title(f'{chart_config["median_title"]}')
+        ax4.set_ylabel('Time (minutes)')
+        ax4.set_xticks(x_pos)
+        ax4.set_xticklabels(data_keys)
+        ax4.legend()
+        
+        cb.finalize()
     
     def _on_match_click(self, match):
         """Handle click on a match scatter point to show detailed info"""
@@ -239,137 +406,73 @@ class SeasonStatsChart(ChartViewBase):
     """Handles season statistics chart view"""
     
     def show(self):
-        """Show season comparison"""
+        """Show season comparison using shared patterns"""
         self._prepare_chart('season_stats', '_show_season_stats')
         
-        if not self._check_analyzer():
-            return
+        def get_data():
+            filters = self._get_filter_settings()
+            return self.ui.analyzer.season_breakdown(
+                include_private_rooms=filters['include_private'],
+                seed_type_filter=filters['seed_val']
+            )
         
-        include_private = self.ui.include_private_var.get()
-        seed_filter = self.ui.seed_filter_var.get()
-        seed_val = seed_filter if seed_filter != 'All' else None
-        
-        seasons_data = self.ui.analyzer.season_breakdown(include_private_rooms=include_private,
-                                                       seed_type_filter=seed_val)
-        if len(seasons_data) < 1:
-            messagebox.showinfo("Info", "No season data available")
-            return
-        
-        # Use ChartBuilder
-        cb = self.ui.chart_builder
-        cb.clear()
-        cb.set_palette(self.ui.chart_options['color_palette'])
-        
-        # Check if comparison is active
-        if self.ui.comparison_active and self.ui.comparison_analyzer:
-            self._show_comparison_chart(cb, seasons_data, include_private, seed_val)
-        else:
-            self._show_single_chart(cb, seasons_data)
+        self.show_with_comparison_pattern(
+            get_data,
+            self._show_single_chart,
+            self._show_comparison_chart,
+            min_data_count=1,
+            data_type="season data"
+        )
     
-    def _show_comparison_chart(self, cb, seasons_data, include_private, seed_val):
-        """Show season stats chart with comparison player"""
-        # Get comparison data with same filtering
+    def _show_comparison_chart(self, cb, seasons_data):
+        """Show season stats chart with comparison player using shared subplot method"""
+        filters = self._get_filter_settings()
         comp_seasons_data = self.ui.comparison_analyzer.season_breakdown(
-            include_private_rooms=include_private,
-            seed_type_filter=seed_val
+            include_private_rooms=filters['include_private'],
+            seed_type_filter=filters['seed_val']
         )
         
         if len(comp_seasons_data) < 1:
-            # Fall back to single player view if comparison has no data
             self._show_single_chart(cb, seasons_data)
             return
         
         # Get all seasons from both players
         all_seasons = sorted(set(list(seasons_data.keys()) + list(comp_seasons_data.keys())))
         
-        axes = cb.create_subplots(2, 2)
-        ax1, ax2, ax3, ax4 = axes
+        # Chart configuration for shared subplot method
+        chart_config = {
+            'avg_title': 'Average Time by Season',
+            'best_title': 'Best Time by Season', 
+            'count_title': 'Matches by Season',
+            'median_title': 'Median Time by Season'
+        }
         
-        # Prepare data arrays for both players
-        main_avg_times = []
-        comp_avg_times = []
-        main_best_times = []
-        comp_best_times = []
-        main_counts = []
-        comp_counts = []
-        main_median_times = []
-        comp_median_times = []
+        # Convert data to the expected format for shared method
+        main_data = {}
+        comp_data = {}
         
         for season in all_seasons:
-            # Main player data
             if season in seasons_data:
-                main_avg_times.append(seasons_data[season]['average']/1000/60)
-                main_best_times.append(seasons_data[season]['best']/1000/60)
-                main_counts.append(seasons_data[season]['matches'])
-                main_median_times.append(seasons_data[season]['median']/1000/60)
+                main_data[season] = {
+                    'avg_time': seasons_data[season]['average'],
+                    'best_time': seasons_data[season]['best'], 
+                    'count': seasons_data[season]['matches'],
+                    'median_time': seasons_data[season]['median']
+                }
             else:
-                main_avg_times.append(0)
-                main_best_times.append(0)
-                main_counts.append(0)
-                main_median_times.append(0)
-            
-            # Comparison player data
+                main_data[season] = {'avg_time': 0, 'best_time': 0, 'count': 0, 'median_time': 0}
+                
             if season in comp_seasons_data:
-                comp_avg_times.append(comp_seasons_data[season]['average']/1000/60)
-                comp_best_times.append(comp_seasons_data[season]['best']/1000/60)
-                comp_counts.append(comp_seasons_data[season]['matches'])
-                comp_median_times.append(comp_seasons_data[season]['median']/1000/60)
+                comp_data[season] = {
+                    'avg_time': comp_seasons_data[season]['average'],
+                    'best_time': comp_seasons_data[season]['best'],
+                    'count': comp_seasons_data[season]['matches'], 
+                    'median_time': comp_seasons_data[season]['median']
+                }
             else:
-                comp_avg_times.append(0)
-                comp_best_times.append(0)
-                comp_counts.append(0)
-                comp_median_times.append(0)
+                comp_data[season] = {'avg_time': 0, 'best_time': 0, 'count': 0, 'median_time': 0}
         
-        # Plot 1: Average times (side-by-side bars)
-        self._plot_side_by_side_bars(ax1, all_seasons, main_avg_times, comp_avg_times, cb)
-        cb.set_labels(ax1, title='Average Time by Season', xlabel='Season', ylabel='Time (minutes)')
-        cb.set_grid(ax1, self.ui.chart_options['show_grid'])
-        cb.set_legend(ax1)
-        
-        # Plot 2: Best times (dual line plot)
-        cb.plot_line(ax2, all_seasons, main_best_times, color_index=0, marker='o',
-                    linewidth=self.ui.chart_options['line_width'], markersize=8,
-                    label=self.ui.analyzer.username)
-        cb.plot_line(ax2, all_seasons, comp_best_times, color_index=1, marker='s',
-                    linewidth=self.ui.chart_options['line_width'], markersize=8,
-                    label=self.ui.comparison_analyzer.username)
-        cb.set_labels(ax2, title='Best Time by Season', xlabel='Season', ylabel='Time (minutes)')
-        cb.set_grid(ax2, self.ui.chart_options['show_grid'])
-        cb.set_legend(ax2)
-        
-        # Plot 3: Match counts (side-by-side bars)
-        self._plot_side_by_side_bars(ax3, all_seasons, main_counts, comp_counts, cb)
-        cb.set_labels(ax3, title='Matches by Season', xlabel='Season', ylabel='Count')
-        cb.set_grid(ax3, self.ui.chart_options['show_grid'])
-        cb.set_legend(ax3)
-        
-        # Plot 4: Median times (side-by-side bars)
-        self._plot_side_by_side_bars(ax4, all_seasons, main_median_times, comp_median_times, cb)
-        cb.set_labels(ax4, title='Median Time by Season', xlabel='Season', ylabel='Time (minutes)')
-        cb.set_grid(ax4, self.ui.chart_options['show_grid'])
-        cb.set_legend(ax4)
-        
-        cb.set_title(f'Season Analysis Comparison: {self.ui.analyzer.username} vs {self.ui.comparison_analyzer.username}')
-        cb.finalize()
-    
-    def _plot_side_by_side_bars(self, ax, x_labels, data1, data2, cb):
-        """Plot side-by-side bars for comparison"""
-        import numpy as np
-        x = np.arange(len(x_labels))
-        width = 0.35
-        
-        # Plot bars for both players
-        bars1 = ax.bar(x - width/2, data1, width, color=cb.get_color(0), 
-                      label=self.ui.analyzer.username, alpha=0.8)
-        bars2 = ax.bar(x + width/2, data2, width, color=cb.get_color(1), 
-                      label=self.ui.comparison_analyzer.username, alpha=0.8)
-        
-        # Set x-tick labels to season numbers
-        ax.set_xticks(x)
-        ax.set_xticklabels(x_labels)
-        
-        # Apply theme styling
-        cb._apply_axis_theme(ax)
+        self._create_subplot_comparison_chart(cb, main_data, comp_data, all_seasons, chart_config)
     
     def _show_single_chart(self, cb, seasons_data):
         """Show season stats chart for single player"""
@@ -411,39 +514,31 @@ class SeedTypesChart(ChartViewBase):
     """Handles seed type analysis chart view"""
     
     def show(self):
-        """Show seed type analysis"""
+        """Show seed type analysis using shared patterns"""
         self._prepare_chart('seed_types', '_show_seed_types')
         
-        if not self._check_analyzer():
-            return
+        def get_data():
+            filters = self._get_filter_settings()
+            return self.ui.analyzer.seed_type_breakdown(
+                include_private_rooms=filters['include_private'],
+                season_filter=filters['season_val']
+            )
         
-        include_private = self.ui.include_private_var.get()
-        season_filter = self.ui.season_var.get()
-        season_val = int(season_filter) if season_filter != 'All' else None
-        
-        seed_types = self.ui.analyzer.seed_type_breakdown(include_private_rooms=include_private,
-                                                        season_filter=season_val)
-        if len(seed_types) < 1:
-            messagebox.showinfo("Info", "No seed type data available")
-            return
-        
-        # Use ChartBuilder
-        cb = self.ui.chart_builder
-        cb.clear()
-        cb.set_palette(self.ui.chart_options['color_palette'])
-        
-        # Check if comparison is active
-        if self.ui.comparison_active and self.ui.comparison_analyzer:
-            self._show_comparison_chart(cb, seed_types, include_private, season_val)
-        else:
-            self._show_single_chart(cb, seed_types)
+        self.show_with_comparison_pattern(
+            get_data,
+            self._show_single_chart,
+            self._show_comparison_chart,
+            min_data_count=1,
+            data_type="seed type data"
+        )
     
-    def _show_comparison_chart(self, cb, seed_types, include_private, season_val):
+    def _show_comparison_chart(self, cb, seed_types):
         """Show seed type chart with comparison player"""
         # Get comparison data with same filtering
+        filters = self._get_filter_settings()
         comp_seed_types = self.ui.comparison_analyzer.seed_type_breakdown(
-            include_private_rooms=include_private,
-            season_filter=season_val
+            include_private_rooms=filters['include_private'],
+            season_filter=filters['season_val']
         )
         
         if len(comp_seed_types) < 1:

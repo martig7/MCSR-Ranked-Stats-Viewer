@@ -62,7 +62,7 @@ class TestUICreation(unittest.TestCase):
         app = MCSRStatsUI(self.root)
         self.assertIsNotNone(app.sidebar)
         self.assertIsNotNone(app.nav_buttons)
-        self.assertEqual(len(app.nav_buttons), 10)  # 10 navigation buttons (includes ELO Progress)
+        self.assertEqual(len(app.nav_buttons), 9)  # 9 navigation buttons (ELO Progress is disabled)
         self.assertIsNotNone(app.quick_stats_frame)
         self.assertIsNotNone(app.quick_stats_labels)
     

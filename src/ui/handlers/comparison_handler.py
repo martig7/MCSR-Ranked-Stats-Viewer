@@ -3,12 +3,12 @@ Comparison Player Handler Module
 Handles loading and managing comparison player data for MCSR Ranked Stats Browser.
 """
 
-import threading
 from tkinter import messagebox
 from ...core.analyzer import MCSRAnalyzer
+from ...utils.base_thread_handler import BaseThreadHandler
 
 
-class ComparisonHandler:
+class ComparisonHandler(BaseThreadHandler):
     """Manages comparison player functionality"""
     
     def __init__(self, ui_context):
@@ -18,7 +18,7 @@ class ComparisonHandler:
         Args:
             ui_context: Reference to main UI (provides access to analyzer, controls, etc.)
         """
-        self.ui = ui_context
+        super().__init__(ui_context)
         self.analyzer = None  # MCSRAnalyzer for comparison player
         self.active = False   # Whether comparison is currently active
     
@@ -38,29 +38,26 @@ class ComparisonHandler:
             messagebox.showwarning("Same Player", "Cannot compare a player with themselves.")
             return
         
-        # Disable button during loading
-        self.ui.load_comparison_btn.config(state='disabled', text='Loading...')
+        def work_func(progress_callback=None):
+            comparison_analyzer = MCSRAnalyzer(username)
+            comparison_analyzer.fetch_all_matches(use_cache=True)
+            return (comparison_analyzer, username)
         
-        def load_in_background():
-            try:
-                comparison_analyzer = MCSRAnalyzer(username)
-                comparison_analyzer.fetch_all_matches(use_cache=True)
-                
-                # Update UI on main thread
-                self.ui.root.after(0, lambda: self._on_loaded(comparison_analyzer, username))
-                
-            except Exception as e:
-                error_msg = str(e)
-                self.ui.root.after(0, lambda: self._on_failed(error_msg))
-        
-        # Start loading in background thread
-        threading.Thread(target=load_in_background, daemon=True).start()
+        self.execute_with_progress(
+            f"Loading comparison player: {username}...",
+            work_func,
+            lambda result: self._on_loaded(result[0], result[1]),
+            self._on_failed,
+            button=self.ui.load_comparison_btn,
+            loading_text="Loading...",
+            normal_text="Load"
+        )
     
     def _on_loaded(self, analyzer, username):
         """Handle successful comparison player loading"""
         self.analyzer = analyzer
         self.active = True
-        self.ui.load_comparison_btn.config(state='normal', text='Load')
+        # Note: Button state is handled by BaseThreadHandler
         self.ui.comparison_var.set(username)
         self.ui.status_var.set(f"Loaded comparison data for {username}")
         
@@ -69,7 +66,7 @@ class ComparisonHandler:
     
     def _on_failed(self, error):
         """Handle failed comparison player loading"""
-        self.ui.load_comparison_btn.config(state='normal', text='Load')
+        # Note: Button state is handled by BaseThreadHandler
         messagebox.showerror("Load Error", f"Failed to load comparison player: {error}")
     
     def clear(self):
@@ -84,15 +81,11 @@ class ComparisonHandler:
     
     def get_filtered_matches(self):
         """Get comparison player's completed matches with same filters as main player"""
-        if not self.analyzer:
-            return []
-        return self.analyzer.filter_matches(**self.ui._build_filter_kwargs(completed_only=True))
+        return self.ui.filter_manager.get_filtered_matches(self.analyzer, completed_only=True)
     
     def get_all_filtered_matches(self):
         """Get all comparison player matches (wins/losses/draws) with same filters as main player"""
-        if not self.analyzer:
-            return []
-        return self.analyzer.filter_matches(**self.ui._build_filter_kwargs(completed_only=False))
+        return self.ui.filter_manager.get_all_filtered_matches(self.analyzer)
     
     def is_active(self) -> bool:
         """Check if comparison is currently active"""

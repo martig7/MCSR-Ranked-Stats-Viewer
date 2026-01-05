@@ -665,20 +665,11 @@ class SegmentAnalyzer:
                                   label=f'{window}-match average',
                                   full_x_data=full_x_data, full_y_data=full_times,
                                   is_comparison=False)
-        
-        # Rolling median (if enabled)
-        if self.ui.chart_options['show_rolling_median'] and len(times) >= 1:
-            window = self.ui.chart_options['rolling_window']
-            cb.add_rolling_median(ax, x_data, times, 
-                                 window=window, color_index=main_line_color_idx + 1,
-                                 label=f'{window}-match median',
-                                 full_x_data=full_x_data, full_y_data=full_times,
-                                 is_comparison=False)
             
             # Add comparison player rolling average if available
             if comp_times and comp_dates and len(comp_times) >= 1:
                 comp_window = self.ui.chart_options['rolling_window']
-                # Use same comparison full x-axis data as calculated above
+                # Prepare comparison full x-axis data for rolling calculations
                 if use_match_numbers:
                     comp_full_x_data = list(range(1, len(comp_full_times) + 1))
                 else:
@@ -689,11 +680,20 @@ class SegmentAnalyzer:
                                       label=f'Comp {comp_window}-match avg',
                                       full_x_data=comp_full_x_data, full_y_data=comp_full_times,
                                       is_comparison=True)
+        
+        # Rolling median (if enabled)
+        if self.ui.chart_options['show_rolling_median'] and len(times) >= 1:
+            window = self.ui.chart_options['rolling_window']
+            cb.add_rolling_median(ax, x_data, times, 
+                                 window=window, color_index=main_line_color_idx + 1,
+                                 label=f'{window}-match median',
+                                 full_x_data=full_x_data, full_y_data=full_times,
+                                 is_comparison=False)
             
             # Add comparison player rolling median if available
             if comp_times and comp_dates and len(comp_times) >= 1:
                 comp_window = self.ui.chart_options['rolling_window']
-                # Use same comparison full x-axis data as calculated above
+                # Prepare comparison full x-axis data for rolling calculations
                 if use_match_numbers:
                     comp_full_x_data = list(range(1, len(comp_full_times) + 1))
                 else:
