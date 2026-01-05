@@ -758,32 +758,32 @@ class ChartBuilder:
             self._clear_hover_elements()
     
     def _find_hover_info(self, ax, hover_x):
-        """Find rolling data values at the hover x position (average or median)"""
+        """Find rolling data values at the hover x position (average and/or median)"""
         hover_info = {}
         
-        # Prioritize the data type that has the most recent data for this axis
-        # This handles the case where both average and median might be stored
-        # but we want to show the one that's currently being displayed
-        
-        # Check main player rolling data
-        main_value = None
+        # Check main player rolling average
         if ax in self.rolling_avg_data and self.rolling_avg_data[ax]:
-            main_value = self._interpolate_rolling_data(self.rolling_avg_data[ax], hover_x)
-        if main_value is None and ax in self.rolling_median_data and self.rolling_median_data[ax]:
-            main_value = self._interpolate_rolling_data(self.rolling_median_data[ax], hover_x)
+            main_avg = self._interpolate_rolling_data(self.rolling_avg_data[ax], hover_x)
+            if main_avg is not None:
+                hover_info['main_avg'] = main_avg
         
-        if main_value is not None:
-            hover_info['main'] = main_value
+        # Check main player rolling median
+        if ax in self.rolling_median_data and self.rolling_median_data[ax]:
+            main_median = self._interpolate_rolling_data(self.rolling_median_data[ax], hover_x)
+            if main_median is not None:
+                hover_info['main_median'] = main_median
         
-        # Check comparison player rolling data
-        comp_value = None
+        # Check comparison player rolling average
         if ax in self.comparison_rolling_avg_data and self.comparison_rolling_avg_data[ax]:
-            comp_value = self._interpolate_rolling_data(self.comparison_rolling_avg_data[ax], hover_x)
-        if comp_value is None and ax in self.comparison_rolling_median_data and self.comparison_rolling_median_data[ax]:
-            comp_value = self._interpolate_rolling_data(self.comparison_rolling_median_data[ax], hover_x)
-            
-        if comp_value is not None:
-            hover_info['comparison'] = comp_value
+            comp_avg = self._interpolate_rolling_data(self.comparison_rolling_avg_data[ax], hover_x)
+            if comp_avg is not None:
+                hover_info['comp_avg'] = comp_avg
+        
+        # Check comparison player rolling median
+        if ax in self.comparison_rolling_median_data and self.comparison_rolling_median_data[ax]:
+            comp_median = self._interpolate_rolling_data(self.comparison_rolling_median_data[ax], hover_x)
+            if comp_median is not None:
+                hover_info['comp_median'] = comp_median
         
         return hover_info if hover_info else None
     
@@ -849,20 +849,23 @@ class ChartBuilder:
         # Format tooltip text (no date/x value, only rolling data)
         tooltip_lines = []
         
-        # Determine what type of rolling data is being shown
-        rolling_type = "Avg"  # Default to average
-        if ax in self.rolling_median_data or ax in self.comparison_rolling_median_data:
-            if ax not in self.rolling_avg_data and ax not in self.comparison_rolling_avg_data:
-                rolling_type = "Median"
+        # Add main player rolling data
+        if 'main_avg' in hover_info:
+            formatted_time = self.time_formatter(hover_info['main_avg'])
+            tooltip_lines.append(f"Rolling Avg: {formatted_time}")
         
-        # Add rolling data values
-        if 'main' in hover_info:
-            formatted_time = self.time_formatter(hover_info['main'])
-            tooltip_lines.append(f"Rolling {rolling_type}: {formatted_time}")
+        if 'main_median' in hover_info:
+            formatted_time = self.time_formatter(hover_info['main_median'])
+            tooltip_lines.append(f"Rolling Median: {formatted_time}")
         
-        if 'comparison' in hover_info:
-            formatted_time = self.time_formatter(hover_info['comparison'])
-            tooltip_lines.append(f"Comp. Rolling {rolling_type}: {formatted_time}")
+        # Add comparison player rolling data
+        if 'comp_avg' in hover_info:
+            formatted_time = self.time_formatter(hover_info['comp_avg'])
+            tooltip_lines.append(f"Comp. Rolling Avg: {formatted_time}")
+        
+        if 'comp_median' in hover_info:
+            formatted_time = self.time_formatter(hover_info['comp_median'])
+            tooltip_lines.append(f"Comp. Rolling Median: {formatted_time}")
         
         tooltip_text = '\n'.join(tooltip_lines)
         
