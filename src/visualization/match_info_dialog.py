@@ -201,23 +201,28 @@ class MatchInfoDialog:
         headers = ["Segment", "Absolute Time", "Split Time"]
         rows = []
         
-        segment_display = {
-            'nether_enter': 'Nether Enter',
-            'bastion_enter': 'Bastion Enter', 
-            'fortress_enter': 'Fortress Enter',
-            'blind_portal': 'Blind Portal',
-            'stronghold_enter': 'Stronghold Enter',
-            'end_enter': 'End Enter',
-            'game_end': 'Game End'
-        }
+        # Define segment order and display names
+        segment_order = [
+            ('nether_enter', 'Nether Enter'),
+            ('bastion_enter', 'Bastion Enter'),
+            ('fortress_enter', 'Fortress Enter'),
+            ('blind_portal', 'Blind Portal'),
+            ('stronghold_enter', 'Stronghold Enter'),
+            ('end_enter', 'End Enter'),
+            ('game_end', 'Game End')
+        ]
         
-        for segment_key, segment_data in self.match.segments.items():
-            display_name = segment_display.get(segment_key, segment_key)
+        for segment_key, display_name in segment_order:
+            if segment_key not in self.match.segments:
+                continue
+            
+            segment_data = self.match.segments[segment_key]
             abs_time = segment_data.get('absolute_time', 0) / 1000  # Convert to seconds
             split_time = segment_data.get('split_time', 0) / 1000
             
-            abs_str = f"{abs_time/60:.2f}m" if abs_time > 60 else f"{abs_time:.1f}s"
-            split_str = f"{split_time/60:.2f}m" if split_time > 60 else f"{split_time:.1f}s"
+            # Format as MM:SS.mmm
+            abs_str = f"{int(abs_time // 60)}:{int(abs_time % 60):02d}.{int((abs_time % 1) * 1000):03d}"
+            split_str = f"{int(split_time // 60)}:{int(split_time % 60):02d}.{int((split_time % 1) * 1000):03d}"
             
             rows.append([display_name, abs_str, split_str])
         
@@ -389,22 +394,25 @@ class MatchInfoDialog:
         lines.append("=== SEGMENT TIMING ===")
         lines.append("")
         
-        # Define display names
-        segment_display = {
-            'nether_enter': 'Nether Enter',
-            'bastion_enter': 'Bastion Enter', 
-            'fortress_enter': 'Fortress Enter',
-            'blind_portal': 'Blind Portal',
-            'stronghold_enter': 'Stronghold Enter',
-            'end_enter': 'End Enter',
-            'game_end': 'Game End'
-        }
+        # Define segment order and display names
+        segment_order = [
+            ('nether_enter', 'Nether Enter'),
+            ('bastion_enter', 'Bastion Enter'),
+            ('fortress_enter', 'Fortress Enter'),
+            ('blind_portal', 'Blind Portal'),
+            ('stronghold_enter', 'Stronghold Enter'),
+            ('end_enter', 'End Enter'),
+            ('game_end', 'Game End')
+        ]
         
         lines.append(f"{'Segment':<20} {'Absolute':<12} {'Split':<12}")
         lines.append("-" * 45)
         
-        for segment_key, segment_data in self.match.segments.items():
-            display_name = segment_display.get(segment_key, segment_key)
+        for segment_key, display_name in segment_order:
+            if segment_key not in self.match.segments:
+                continue
+            
+            segment_data = self.match.segments[segment_key]
             abs_time = segment_data.get('absolute_time', 0) / 1000  # Convert to seconds
             split_time = segment_data.get('split_time', 0) / 1000
             
