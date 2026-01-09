@@ -142,6 +142,7 @@ class Sidebar:
             ("📊 Segment Trends", lambda: self.ui.segment_analyzer.show_segment_progression()),
             ("📉 Distribution", lambda: self.ui.chart_views.distribution.show()),
             ("🔍 Match Browser", self.ui._show_match_browser),
+            ("🚀 All Time Best Pace", self.ui._show_forecast),
         ]
         
         self.ui.nav_buttons = {}
@@ -195,6 +196,7 @@ class MainContent:
         self._create_stats_tab()
         self._create_chart_tab()
         self._create_data_tab()
+        self._create_forecast_tab()
         
         # Show welcome message
         self.ui._show_welcome()
@@ -396,6 +398,98 @@ class MainContent:
         
         # Store match references for detail lookup
         self.ui.match_lookup = {}
+
+    def _create_forecast_tab(self):
+        """Create the all-time best pace forecast tab"""
+        self.ui.forecast_frame = ttk.Frame(self.ui.notebook, padding=10)
+        self.ui.notebook.add(self.ui.forecast_frame, text="All Time Best Pace")
+        
+        # Create paned window to allow resizing
+        self.ui.forecast_paned = ttk.PanedWindow(self.ui.forecast_frame, orient=tk.VERTICAL)
+        self.ui.forecast_paned.pack(fill=tk.BOTH, expand=True)
+        
+        # Top frame for controls and treeview
+        forecast_top_frame = ttk.Frame(self.ui.forecast_paned)
+        self.ui.forecast_paned.add(forecast_top_frame, weight=3)
+        
+        # Controls frame for forecast options
+        forecast_controls_frame = ttk.Frame(forecast_top_frame)
+        forecast_controls_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Percentile selection dropdown
+        ttk.Label(forecast_controls_frame, text="Forecast Type:").pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.ui.forecast_percentile_var = tk.StringVar(value="50th (Median)")
+        forecast_percentile_values = [
+            "25th (Optimistic)", 
+            "50th (Median)", 
+            "75th (Conservative)",
+            "10th (Very Optimistic)",
+            "90th (Very Conservative)"
+        ]
+        self.ui.forecast_percentile_combo = ttk.Combobox(
+            forecast_controls_frame,
+            textvariable=self.ui.forecast_percentile_var,
+            values=forecast_percentile_values,
+            state="readonly",
+            width=20
+        )
+        self.ui.forecast_percentile_combo.pack(side=tk.LEFT, padx=(0, 10))
+        self.ui.forecast_percentile_combo.bind('<<ComboboxSelected>>', self.ui._on_forecast_percentile_change)
+        
+        # Info label
+        ttk.Label(forecast_controls_frame, text="(Lower percentiles = faster/optimistic times)").pack(side=tk.LEFT, pady=2)
+        
+        # Treeview frame
+        forecast_tree_frame = ttk.Frame(forecast_top_frame)
+        forecast_tree_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Create treeview for forecast results
+        forecast_columns = ('Rank', 'Date', 'Forecasted Time', 'Status', 'Current Progress', 'Last Segment')
+        self.ui.forecast_tree = ttk.Treeview(forecast_tree_frame, columns=forecast_columns, show='headings', height=15)
+        
+        # Configure column headings and widths
+        headings = {
+            'Rank': 50,
+            'Date': 120,
+            'Forecasted Time': 120,
+            'Status': 100,
+            'Current Progress': 120,
+            'Last Segment': 150
+        }
+        
+        for col, width in headings.items():
+            self.ui.forecast_tree.heading(col, text=col, anchor='w')
+            self.ui.forecast_tree.column(col, width=width, minwidth=50, anchor='w')
+        
+        # Add scrollbars
+        forecast_v_scroll = ttk.Scrollbar(forecast_tree_frame, orient=tk.VERTICAL, command=self.ui.forecast_tree.yview)
+        forecast_h_scroll = ttk.Scrollbar(forecast_tree_frame, orient=tk.HORIZONTAL, command=self.ui.forecast_tree.xview)
+        self.ui.forecast_tree.configure(yscrollcommand=forecast_v_scroll.set, xscrollcommand=forecast_h_scroll.set)
+        
+        # Pack treeview and scrollbars
+        self.ui.forecast_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        forecast_v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        forecast_h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        # Bottom frame for forecast details
+        self.ui.forecast_detail_frame = ttk.LabelFrame(self.ui.forecast_paned, text="Forecast Details", padding=10)
+        self.ui.forecast_paned.add(self.ui.forecast_detail_frame, weight=1)
+        
+        # Rich text widget for forecast details  
+        from .widgets.rich_text_widget import RichTextWidget
+        self.ui.forecast_detail_text = RichTextWidget(self.ui.forecast_detail_frame, theme="dark", height=8)
+        self.ui.forecast_detail_text.pack(fill=tk.BOTH, expand=True)
+        
+        # Add initial message
+        self.ui.forecast_detail_text.add_text("Select a run above to view forecast breakdown", ['muted', 'center'])
+        self.ui.forecast_detail_text.finalize()
+        
+        # Bind treeview selection event
+        self.ui.forecast_tree.bind('<<TreeviewSelect>>', self.ui._on_forecast_select)
+        
+        # Store forecast references for detail lookup
+        self.ui.forecast_lookup = {}
 
 
 class StatusBar:

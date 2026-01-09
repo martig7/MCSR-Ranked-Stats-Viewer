@@ -21,6 +21,7 @@ from .handlers.comparison_handler import ComparisonHandler
 from .handlers.data_loader import DataLoader
 from .components import TopBar, Sidebar, MainContent, StatusBar
 from ..utils.filter_manager import FilterManager
+from ..utils.speedrun_forecast import create_forecast_results
 
 
 class MCSRStatsUI:
@@ -67,6 +68,10 @@ class MCSRStatsUI:
         
         # Current view tracking
         self._current_view = 'summary'  # Track current view to preserve on filter changes
+        
+        # Forecast settings
+        self.forecast_rolling_window = 20  # Default rolling window size for forecasts
+        self.forecast_percentile = 50.0   # Default percentile for forecasts (median)
         
         # Initialize handlers early (before UI setup so buttons can reference them)
         self.comparison_handler = None  # Will be initialized after UI setup
@@ -285,6 +290,8 @@ class MCSRStatsUI:
             self.chart_views.distribution.show()
         elif self._current_view == 'match_browser':
             self._show_match_browser()
+        elif self._current_view == 'forecast':
+            self._show_forecast()
         else:
             # Fallback to summary if no valid view is tracked
             self._show_summary()
@@ -614,6 +621,197 @@ class MCSRStatsUI:
             
         self._populate_match_tree()
     
+    def _show_forecast(self):
+        """Show all-time best pace forecast view"""
+        self._current_view = 'forecast'
+        self.notebook.select(3)  # Forecast tab
+        
+        # Hide segment controls when not viewing segments
+        if hasattr(self, 'segment_text_controls_frame'):
+            self.segment_text_controls_frame.pack_forget()
+            
+        self._populate_forecast_tree()
+    
+    def _populate_forecast_tree(self):
+        """Populate the forecast treeview with data"""
+        if not self.analyzer or not self.analyzer.matches:
+            return
+        
+        # Clear existing items
+        for item in self.forecast_tree.get_children():
+            self.forecast_tree.delete(item)
+        
+        self.forecast_lookup.clear()
+        
+        # Get filtered matches with segment data
+        filter_kwargs = self.filter_manager.build_filter_kwargs()
+        filtered_matches = self.analyzer.filter_matches(**filter_kwargs)
+        
+        # Only include matches with segment data for forecasting
+        matches_with_segments = [m for m in filtered_matches if m.has_detailed_data]
+        
+        if not matches_with_segments:
+            # Insert message row
+            self.forecast_tree.insert('', 'end', values=('—', '—', 'No matches with segment data', '—', '—', '—'))
+            return
+        
+        # Generate forecast results
+        try:
+            forecast_results = create_forecast_results(matches_with_segments, 
+                                                      rolling_window=self.forecast_rolling_window,
+                                                      percentile=self.forecast_percentile)
+            
+            if not forecast_results:
+                self.forecast_tree.insert('', 'end', values=('—', '—', 'No forecastable data', '—', '—', '—'))
+                return
+            
+            # Populate tree with forecast data
+            for i, result in enumerate(forecast_results, 1):
+                match = result['match']
+                forecast_time = result['forecast_time']
+                breakdown = result['breakdown']
+                is_completed = result['is_completed']
+                
+                # Format values
+                rank = str(i)
+                date = match.date_str()
+                
+                # Format forecasted time
+                forecast_time_str = self._format_time(forecast_time)
+                
+                # Status
+                if is_completed:
+                    status = "Completed"
+                    current_progress = forecast_time_str
+                    last_segment = "Run Complete"
+                else:
+                    status = "Forecasted"
+                    if breakdown and 'current_time' in breakdown:
+                        current_progress = self._format_time(breakdown['current_time'])
+                    else:
+                        current_progress = "—"
+                    
+                    if breakdown and 'last_completed_segment' in breakdown:
+                        from ..core.segment_constants import get_segment_display_name
+                        last_segment = get_segment_display_name(breakdown['last_completed_segment'])
+                    else:
+                        last_segment = "—"
+                
+                # Insert into tree
+                item_id = self.forecast_tree.insert('', 'end', values=(
+                    rank, date, forecast_time_str, status, current_progress, last_segment
+                ))
+                
+                # Store reference for details
+                self.forecast_lookup[item_id] = result
+                
+        except Exception as e:
+            # Handle errors gracefully
+            self.forecast_tree.insert('', 'end', values=('Error', '—', str(e), '—', '—', '—'))
+            print(f"Forecast error: {e}")  # For debugging
+    
+    def _on_forecast_select(self, event):
+        """Handle forecast tree selection to show details"""
+        selection = self.forecast_tree.selection()
+        if not selection:
+            return
+        
+        item_id = selection[0]
+        if item_id not in self.forecast_lookup:
+            return
+        
+        result = self.forecast_lookup[item_id]
+        match = result['match']
+        breakdown = result['breakdown']
+        
+        # Clear previous content
+        self.forecast_detail_text.clear()
+        
+        if breakdown:
+            if breakdown['type'] == 'completed':
+                self.forecast_detail_text.add_heading("Completed Run", level=2)
+                self.forecast_detail_text.add_text(f"Match ID: {match.id}", [])
+                self.forecast_detail_text.add_text(f"Actual completion time: ", [])
+                self.forecast_detail_text.add_text(self._format_time(breakdown['actual_time']), ['accent'])
+                self.forecast_detail_text.add_line()
+                self.forecast_detail_text.add_text("This is a completed run with actual finish time.", [])
+                
+            else:  # forecasted
+                self.forecast_detail_text.add_heading("Forecasted Completion", level=2)
+                self.forecast_detail_text.add_text(f"Match ID: {match.id}", [])
+                self.forecast_detail_text.add_line()
+                
+                self.forecast_detail_text.add_text("Current progress: ", [])
+                self.forecast_detail_text.add_text(self._format_time(breakdown['current_time']), ['accent'])
+                self.forecast_detail_text.add_line()
+                
+                self.forecast_detail_text.add_text("Forecasted completion: ", [])
+                self.forecast_detail_text.add_text(self._format_time(breakdown['forecast_time']), ['success'])
+                self.forecast_detail_text.add_line()
+                
+                remaining_time = breakdown['forecast_time'] - breakdown['current_time']
+                self.forecast_detail_text.add_text("Estimated remaining time: ", [])
+                self.forecast_detail_text.add_text(self._format_time(remaining_time), ['warning'])
+                self.forecast_detail_text.add_line()
+                
+                # Show completed and forecasted segments
+                if breakdown['segments_completed']:
+                    self.forecast_detail_text.add_text("Completed segments: ", [])
+                    completed_names = [self._get_segment_display_name(seg) for seg in breakdown['segments_completed']]
+                    self.forecast_detail_text.add_text(", ".join(completed_names), ['muted'])
+                    self.forecast_detail_text.add_line()
+                
+                if breakdown['segments_forecasted']:
+                    self.forecast_detail_text.add_text("Forecasted segments: ", [])
+                    forecasted_names = [self._get_segment_display_name(seg) for seg in breakdown['segments_forecasted']]
+                    self.forecast_detail_text.add_text(", ".join(forecasted_names), ['muted'])
+                    self.forecast_detail_text.add_line()
+                
+                self.forecast_detail_text.add_line()
+                
+                # Show rolling window and percentile information
+                if 'rolling_window_used' in breakdown:
+                    window_used = breakdown['rolling_window_used']
+                    percentile_name = self.forecast_percentile_var.get() if hasattr(self, 'forecast_percentile_var') else f"{self.forecast_percentile}th percentile"
+                    self.forecast_detail_text.add_text(f"Forecast based on {percentile_name.lower()} of your {window_used} most recent completed runs before this match.", ['muted', 'italic'])
+                else:
+                    self.forecast_detail_text.add_text("Forecast based on your historical segment performance.", ['muted', 'italic'])
+        else:
+            self.forecast_detail_text.add_text("No forecast details available", ['muted', 'center'])
+        
+        self.forecast_detail_text.finalize()
+
+    def _format_time(self, time_ms):
+        """Format time in milliseconds to MM:SS.mmm"""
+        if time_ms is None:
+            return "N/A"
+        seconds = time_ms / 1000
+        minutes, sec_remainder = divmod(seconds, 60)
+        return f'{int(minutes)}:{int(sec_remainder):02d}.{int(time_ms % 1000):03d}'
+    
+    def _get_segment_display_name(self, segment_key):
+        """Get display name for a segment"""
+        from ..core.segment_constants import get_segment_display_name
+        return get_segment_display_name(segment_key)
+    
+    def _on_forecast_percentile_change(self, event=None):
+        """Handle forecast percentile dropdown change"""
+        # Parse percentile from selection
+        selection = self.forecast_percentile_var.get()
+        percentile_map = {
+            "10th (Very Optimistic)": 10.0,
+            "25th (Optimistic)": 25.0,
+            "50th (Median)": 50.0,
+            "75th (Conservative)": 75.0,
+            "90th (Very Conservative)": 90.0
+        }
+        
+        self.forecast_percentile = percentile_map.get(selection, 50.0)
+        
+        # Refresh forecast view if currently active
+        if hasattr(self, '_current_view') and self._current_view == 'forecast':
+            self._populate_forecast_tree()
+    
     def _clear_display(self):
         """Clear all display areas"""
         # Clear text areas
@@ -624,8 +822,17 @@ class MCSRStatsUI:
         self.chart_builder.finalize()
         
         # Clear match browser
-        for item in self.data_tree.get_children():
-            self.data_tree.delete(item)
+        for item in self.match_tree.get_children():
+            self.match_tree.delete(item)
+        
+        # Clear forecast browser
+        if hasattr(self, 'forecast_tree'):
+            for item in self.forecast_tree.get_children():
+                self.forecast_tree.delete(item)
+            if hasattr(self, 'forecast_detail_text'):
+                self.forecast_detail_text.clear()
+                self.forecast_detail_text.add_text("No data loaded", ['muted', 'center'])
+                self.forecast_detail_text.finalize()
         
         # Clear quick stats
         self.quick_stats_text.config(state='normal')
