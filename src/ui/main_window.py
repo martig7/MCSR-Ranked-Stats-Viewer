@@ -166,36 +166,6 @@ class MCSRStatsUI:
         self.quick_stats_labels['Best Time'].config(text=self._time_str(stats['best_time']))
         self.quick_stats_labels['Average'].config(text=self._time_str(int(stats['average_time']) if stats['average_time'] is not None else None))
         
-    def _build_filter_kwargs(self, completed_only: bool = False) -> dict:
-        """Build filter kwargs from current UI state for use with analyzer.filter_matches()"""
-        kwargs = {
-            'include_private_rooms': self.include_private_var.get(),
-            'date_from': self._filter_date_from,
-            'date_to': self._filter_date_to,
-            'min_time_ms': self._filter_time_min,
-            'max_time_ms': self._filter_time_max,
-        }
-        
-        # Season filter
-        season_filter = self.season_var.get()
-        if season_filter != 'All':
-            kwargs['seasons'] = [int(season_filter)]
-        
-        # Seed type filter
-        seed_filter = self.seed_filter_var.get()
-        if seed_filter != 'All':
-            kwargs['seed_types'] = [seed_filter]
-        
-        # Completed only mode (user's wins for stats/charts)
-        if completed_only:
-            kwargs['completed_only'] = True
-        else:
-            # All matches mode - need to identify user
-            kwargs['require_user_identified'] = True
-        
-        # Note: This method now delegates to FilterManager for consistency
-        return self.filter_manager.build_filter_kwargs(completed_only)
-    
     def _get_filtered_matches(self):
         """Get completed matches (user's wins) filtered by current UI filters"""
         return self.filter_manager.get_filtered_matches(self.analyzer, completed_only=True)
@@ -233,39 +203,13 @@ class MCSRStatsUI:
         """Generate summary statistics text for a given analyzer"""
         if not analyzer:
             return "No data loaded."
-            
+
         # Get matches with consistent filtering
         if analyzer == self.analyzer:
-            # For main player, get all filtered matches (this applies all filters including advanced ones)
-            all_matches = self._get_all_filtered_matches() if hasattr(self, '_get_all_filtered_matches') else []
-            # If _get_all_filtered_matches doesn't exist, use manual filtering
-            if not all_matches:
-                include_private = self.include_private_var.get()
-                all_matches = analyzer.get_all_matches_with_result(include_private_rooms=include_private)
-                
-                # Apply season and seed filters
-                season_filter = self.season_var.get()
-                seed_filter = self.seed_filter_var.get()
-                
-                if season_filter != 'All':
-                    all_matches = [m for m in all_matches if m.season == int(season_filter)]
-                if seed_filter != 'All':
-                    all_matches = [m for m in all_matches if m.seed_type == seed_filter]
-                    
-                # Apply advanced filters
-                if self._filter_date_from:
-                    all_matches = [m for m in all_matches if m.datetime_obj >= self._filter_date_from]
-                if self._filter_date_to:
-                    all_matches = [m for m in all_matches if m.datetime_obj <= self._filter_date_to]
-                if self._filter_time_min is not None:
-                    all_matches = [m for m in all_matches if not m.match_time or m.match_time >= self._filter_time_min]
-                if self._filter_time_max is not None:
-                    all_matches = [m for m in all_matches if not m.match_time or m.match_time <= self._filter_time_max]
+            all_matches = self._get_all_filtered_matches()
         else:
-            # For comparison player, use the filtered comparison matches
             all_matches = self._get_all_filtered_comparison_matches()
-        
-        # Use TextPresenter to generate the summary
+
         return self.text_presenter.generate_summary_text(analyzer, all_matches)
     
     def _refresh_current_view(self):
@@ -839,11 +783,7 @@ class MCSRStatsUI:
         self.quick_stats_text.delete(1.0, tk.END)
         self.quick_stats_text.insert('1.0', "No data loaded")
         self.quick_stats_text.config(state='disabled')
-    
-    def _set_status(self, message: str):
-        """Set status bar message"""
-        self.status_var.set(message)
-    
+
     def _show_loading_progress(self, loading_text: str = ""):
         """Show progress bar and loading text"""
         self.progress.pack(side=tk.RIGHT, padx=(5, 0))

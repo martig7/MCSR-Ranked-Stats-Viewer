@@ -62,7 +62,7 @@ class TestUICreation(unittest.TestCase):
         app = MCSRStatsUI(self.root)
         self.assertIsNotNone(app.sidebar)
         self.assertIsNotNone(app.nav_buttons)
-        self.assertEqual(len(app.nav_buttons), 9)  # 9 navigation buttons (ELO Progress is disabled)
+        self.assertEqual(len(app.nav_buttons), 10)  # 10 navigation buttons (ELO Progress is disabled)
         self.assertIsNotNone(app.quick_stats_frame)
         self.assertIsNotNone(app.quick_stats_labels)
     
@@ -194,23 +194,23 @@ class TestFilterFunctionality(unittest.TestCase):
         self.assertFalse(self.app.include_private_var.get())
     
     def test_build_filter_kwargs(self):
-        """Test filter kwargs building"""
-        kwargs = self.app._build_filter_kwargs(completed_only=True)
+        """Test filter kwargs building via filter_manager"""
+        kwargs = self.app.filter_manager.build_filter_kwargs(completed_only=True)
         self.assertIn('include_private_rooms', kwargs)
         self.assertIn('completed_only', kwargs)
         self.assertTrue(kwargs['completed_only'])
-    
+
     def test_build_filter_kwargs_with_season(self):
         """Test filter kwargs with season filter"""
         self.app.season_var.set('6')
-        kwargs = self.app._build_filter_kwargs()
+        kwargs = self.app.filter_manager.build_filter_kwargs()
         self.assertIn('seasons', kwargs)
         self.assertEqual(kwargs['seasons'], [6])
-    
+
     def test_build_filter_kwargs_with_seed_type(self):
         """Test filter kwargs with seed type filter"""
         self.app.seed_filter_var.set('Random Seed')
-        kwargs = self.app._build_filter_kwargs()
+        kwargs = self.app.filter_manager.build_filter_kwargs()
         self.assertIn('seed_types', kwargs)
         self.assertEqual(kwargs['seed_types'], ['Random Seed'])
 

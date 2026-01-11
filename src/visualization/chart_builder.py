@@ -359,17 +359,7 @@ class ChartBuilder:
             rolling_x = filtered_x
 
         if rolling_values and rolling_x:
-            # Sort by x values to ensure proper line plotting
-            if len(rolling_x) > 1:
-                # Create pairs and sort
-                pairs = list(zip(rolling_x, rolling_values))
-                if hasattr(rolling_x[0], 'timestamp'):
-                    # Sort by timestamp for datetime objects
-                    pairs.sort(key=lambda p: p[0].timestamp())
-                else:
-                    # Sort by value for numeric data
-                    pairs.sort(key=lambda p: p[0])
-                rolling_x, rolling_values = zip(*pairs)
+            rolling_x, rolling_values = self._sort_rolling_data(rolling_x, rolling_values)
 
             # Plot the rolling statistics line
             ax.plot(rolling_x, rolling_values, color=color, linewidth=linewidth,
@@ -378,19 +368,77 @@ class ChartBuilder:
             # Store rolling data for hover tooltips if data_storage_key provided
             if data_storage_key:
                 rolling_data = list(zip(rolling_x, rolling_values))
-                
+
                 if is_comparison:
                     comparison_dict = getattr(self, f"comparison_{data_storage_key}")
-                    if ax not in comparison_dict:
-                        comparison_dict[ax] = []
                     comparison_dict[ax] = rolling_data
                 else:
                     storage_dict = getattr(self, data_storage_key)
-                    if ax not in storage_dict:
-                        storage_dict[ax] = []
                     storage_dict[ax] = rolling_data
 
         return self
+
+    def _sort_rolling_data(self, x_data, *y_data_lists):
+        """
+        Sort rolling data by x values, handling both datetime and numeric types.
+
+        Args:
+            x_data: X values (list)
+            *y_data_lists: One or more lists of Y values to sort alongside X
+
+        Returns:
+            Tuple of (sorted_x, sorted_y1, sorted_y2, ...) or (sorted_x, sorted_y) if single list
+        """
+        if len(x_data) <= 1:
+            if len(y_data_lists) == 1:
+                return x_data, y_data_lists[0]
+            return (x_data,) + y_data_lists
+
+        # Create tuples and sort
+        combined = list(zip(x_data, *y_data_lists))
+        if hasattr(x_data[0], 'timestamp'):
+            combined.sort(key=lambda t: t[0].timestamp())
+        else:
+            combined.sort(key=lambda t: t[0])
+
+        # Unzip results
+        result = tuple(zip(*combined))
+        return result
+
+    def _filter_to_visible_range(self, x_data, visible_x_data, *data_lists):
+        """
+        Filter data to only include points within the visible x range.
+
+        Args:
+            x_data: Full X values to filter
+            visible_x_data: Visible X range (used to determine bounds)
+            *data_lists: Additional data lists to filter in parallel
+
+        Returns:
+            Tuple of filtered (x, data1, data2, ...) lists
+        """
+        if not visible_x_data or not x_data:
+            return (x_data,) + data_lists
+
+        visible_start = visible_x_data[0]
+        visible_end = visible_x_data[-1]
+
+        # Handle datetime comparison
+        if hasattr(visible_start, 'timestamp'):
+            visible_start_ts = visible_start.timestamp()
+            visible_end_ts = visible_end.timestamp()
+
+            indices = [
+                i for i, x_val in enumerate(x_data)
+                if visible_start_ts <= (x_val.timestamp() if hasattr(x_val, 'timestamp') else x_val) <= visible_end_ts
+            ]
+        else:
+            indices = [i for i, x_val in enumerate(x_data) if visible_start <= x_val <= visible_end]
+
+        filtered_x = [x_data[i] for i in indices]
+        filtered_data = tuple([data_list[i] for i in indices] for data_list in data_lists)
+
+        return (filtered_x,) + filtered_data
         
     def add_rolling_average(self, ax: plt.Axes, x_data, y_data,
                             window: int = 10, color: str = None,
@@ -428,122 +476,59 @@ class ChartBuilder:
                            fill_alpha: float = 0.15, label: str = None,
                            show_fill: bool = True, color_index: int = 2,
                            full_x_data=None, full_y_data=None):
-        """Add rolling standard deviation bands (mean ± std dev) to the chart
-        
-        Args:
-            ax: The matplotlib axes to plot on
-            x_data: X values for the visible portion
-            y_data: Y values for the visible portion  
-            window: Rolling window size
-            color: Line color
-            linewidth: Line width
-            alpha: Line transparency
-            fill_alpha: Fill transparency
-            label: Legend label
-            show_fill: Whether to fill between bounds
-            color_index: Color palette index
-            full_x_data: Complete X dataset (for calculating with historical data)
-            full_y_data: Complete Y dataset (for calculating with historical data)
-        """
+        """Add rolling standard deviation bands (mean +/- std dev) to the chart"""
         if len(y_data) < 1:
             return self
-        
+
         color = color or self.get_color(color_index)
-        
+
         # Use full dataset for calculation if provided, otherwise use visible data
         calc_x = full_x_data if full_x_data is not None else x_data
         calc_y = full_y_data if full_y_data is not None else y_data
-        
+
         if len(calc_y) < window and full_y_data is None:
             return self
-        
-        rolling_mean = []
+
+        # Calculate rolling std dev bands
         rolling_upper = []
         rolling_lower = []
         rolling_x = []
-        
-        # Calculate rolling std dev using full dataset
+
         for i in range(len(calc_y)):
-            # Use available data if less than window size
             start_idx = max(0, i - window + 1)
             window_data = calc_y[start_idx:i+1]
-            
+
             if len(window_data) >= 1:
                 mean = statistics.mean(window_data)
                 std = statistics.stdev(window_data) if len(window_data) > 1 else 0
-                rolling_mean.append(mean)
                 rolling_upper.append(mean + std)
                 rolling_lower.append(mean - std)
                 rolling_x.append(calc_x[i])
-        
-        # If using full dataset, filter to only show the visible range
-        if full_x_data is not None and full_y_data is not None:
-            if len(x_data) > 0:
-                visible_start = x_data[0]
-                visible_end = x_data[-1]
-                
-                # Handle datetime comparison properly
-                if hasattr(visible_start, 'timestamp'):
-                    # Convert to timestamps for reliable comparison
-                    visible_start_ts = visible_start.timestamp()
-                    visible_end_ts = visible_end.timestamp()
-                    
-                    # Filter rolling data to visible range
-                    filtered_mean = []
-                    filtered_upper = []
-                    filtered_lower = []
-                    filtered_x = []
-                    for i, x_val in enumerate(rolling_x):
-                        x_val_ts = x_val.timestamp() if hasattr(x_val, 'timestamp') else x_val
-                        if visible_start_ts <= x_val_ts <= visible_end_ts:
-                            filtered_mean.append(rolling_mean[i])
-                            filtered_upper.append(rolling_upper[i])
-                            filtered_lower.append(rolling_lower[i])
-                            filtered_x.append(x_val)
-                else:
-                    # Numeric comparison
-                    filtered_mean = []
-                    filtered_upper = []
-                    filtered_lower = []
-                    filtered_x = []
-                    for i, x_val in enumerate(rolling_x):
-                        if visible_start <= x_val <= visible_end:
-                            filtered_mean.append(rolling_mean[i])
-                            filtered_upper.append(rolling_upper[i])
-                            filtered_lower.append(rolling_lower[i])
-                            filtered_x.append(x_val)
-                
-                rolling_mean = filtered_mean
-                rolling_upper = filtered_upper
-                rolling_lower = filtered_lower
-                rolling_x = filtered_x
-        
+
+        # Filter to visible range if using full dataset
+        if full_x_data is not None and full_y_data is not None and x_data:
+            rolling_x, rolling_upper, rolling_lower = self._filter_to_visible_range(
+                rolling_x, x_data, rolling_upper, rolling_lower
+            )
+
         if rolling_x and rolling_upper and rolling_lower:
-            # Ensure data is sorted by x values before plotting
-            if len(rolling_x) > 1:
-                # Create list of (x, upper, lower) tuples and sort by x
-                triples = list(zip(rolling_x, rolling_upper, rolling_lower))
-                if hasattr(rolling_x[0], 'timestamp'):
-                    # Sort datetime objects
-                    triples.sort(key=lambda t: t[0])
-                else:
-                    # Sort numeric values
-                    triples.sort(key=lambda t: t[0])
-                rolling_x, rolling_upper, rolling_lower = zip(*triples)
-            
-            label = label or f'±1 Std Dev ({window}-pt)'
-            
+            rolling_x, rolling_upper, rolling_lower = self._sort_rolling_data(
+                rolling_x, rolling_upper, rolling_lower
+            )
+
+            label = label or f'+/-1 Std Dev ({window}-pt)'
+
             # Plot upper and lower bounds
             ax.plot(rolling_x, rolling_upper, color=color, linewidth=linewidth,
                    alpha=alpha, linestyle='--', label=label)
             ax.plot(rolling_x, rolling_lower, color=color, linewidth=linewidth,
                    alpha=alpha, linestyle='--')
-            
+
             # Optionally fill between the bounds
             if show_fill:
-                ax.fill_between(rolling_x, rolling_lower, rolling_upper, 
+                ax.fill_between(rolling_x, rolling_lower, rolling_upper,
                                color=color, alpha=fill_alpha)
-        
+
         return self
         
     def add_pb_line(self, ax: plt.Axes, x_data, y_data,

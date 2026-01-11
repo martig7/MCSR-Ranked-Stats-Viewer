@@ -13,16 +13,42 @@ from ...visualization.match_info_dialog import show_match_info_dialog
 
 class SegmentAnalyzer:
     """Manages segment analysis views and state"""
-    
+
+    # Segment names in canonical order
+    SEGMENT_NAMES = ['nether_enter', 'bastion_enter', 'fortress_enter', 'blind_portal',
+                     'stronghold_enter', 'end_enter', 'game_end']
+
+    # Display names for absolute time mode
+    ABSOLUTE_DISPLAY_NAMES = {
+        'nether_enter': 'Nether Enter',
+        'bastion_enter': 'Bastion',
+        'fortress_enter': 'Fortress',
+        'blind_portal': 'Blind Portal',
+        'stronghold_enter': 'Stronghold',
+        'end_enter': 'End Enter',
+        'game_end': 'Completion'
+    }
+
+    # Display names for split time mode
+    SPLIT_DISPLAY_NAMES = {
+        'nether_enter': 'Overworld',
+        'bastion_enter': 'Nether -> Bastion',
+        'fortress_enter': 'Bastion -> Fortress',
+        'blind_portal': 'Structures -> Blind',
+        'stronghold_enter': 'Blind -> Stronghold',
+        'end_enter': 'Stronghold -> End',
+        'game_end': 'End -> Finish'
+    }
+
     def __init__(self, ui_context):
         """
         Initialize segment analyzer
-        
+
         Args:
             ui_context: Reference to main UI (provides access to analyzer, chart_builder, etc.)
         """
         self.ui = ui_context
-        
+
         # Segment expansion state
         self._segment_expanded = False
         self._expanded_segment = None
@@ -30,6 +56,56 @@ class SegmentAnalyzer:
         self._cached_segment_data = {}  # Cached data for expanded view
         self._segment_display = {}  # Display names for segments
         self._available_segments = []  # Segments with enough data
+
+    def _collect_segment_data(self, matches: List, segment: str, show_splits: bool) -> Dict[str, List]:
+        """
+        Collect segment timing data from a list of matches.
+
+        Args:
+            matches: List of Match objects with detailed data
+            segment: Segment name to collect data for
+            show_splits: Whether to use split times or absolute times
+
+        Returns:
+            Dict with 'times', 'dates', and 'matches' lists
+        """
+        times = []
+        dates = []
+        match_objs = []
+
+        for match in matches:
+            if segment not in match.segments:
+                continue
+
+            # For game_end, only include if user actually completed the run
+            if segment == 'game_end' and not match.user_completed:
+                continue
+
+            # For incomplete matches (draw/forfeit), skip the last segment for splits
+            if show_splits and (match.is_draw or match.forfeited):
+                last_segment = self._get_last_segment(match)
+                if segment == last_segment:
+                    continue
+
+            time_key = 'split_time' if show_splits else 'absolute_time'
+            time_val = match.segments[segment][time_key] / 1000 / 60
+            times.append(time_val)
+            dates.append(match.datetime_obj)
+            match_objs.append(match)
+
+        return {'times': times, 'dates': dates, 'matches': match_objs}
+
+    def _get_last_segment(self, match) -> Optional[str]:
+        """Get the last segment present in a match's segment data."""
+        last_segment = None
+        for seg in self.SEGMENT_NAMES:
+            if seg in match.segments:
+                last_segment = seg
+        return last_segment
+
+    def _get_segment_display_names(self, show_splits: bool) -> Dict[str, str]:
+        """Get segment display names based on mode."""
+        return self.SPLIT_DISPLAY_NAMES if show_splits else self.ABSOLUTE_DISPLAY_NAMES
         
     def show_segments_text(self):
         """Show segment analysis in text tab"""
@@ -118,164 +194,61 @@ class SegmentAnalyzer:
         
         # Sort by date
         detailed_matches.sort(key=lambda x: x.date)
-        
+
         # Check if we should show split times or absolute times
         show_splits = self.ui.show_splits_var.get() if self.ui.show_splits_var else False
-        
-        segment_names = ['nether_enter', 'bastion_enter', 'fortress_enter', 'blind_portal', 
-                        'stronghold_enter', 'end_enter', 'game_end']
-        
-        # Display names differ based on mode
-        if show_splits:
-            segment_display = {
-                'nether_enter': 'Overworld',
-                'bastion_enter': 'Nether → Bastion',
-                'fortress_enter': 'Bastion → Fortress',
-                'blind_portal': 'Structures → Blind',
-                'stronghold_enter': 'Blind → Stronghold',
-                'end_enter': 'Stronghold → End',
-                'game_end': 'End → Finish'
-            }
-        else:
-            segment_display = {
-                'nether_enter': 'Nether Enter',
-                'bastion_enter': 'Bastion',
-                'fortress_enter': 'Fortress',
-                'blind_portal': 'Blind Portal',
-                'stronghold_enter': 'Stronghold',
-                'end_enter': 'End Enter',
-                'game_end': 'Completion'
-            }
-        
+
         # Cache segment display names for expanded view
+        segment_display = self._get_segment_display_names(show_splits)
         self._segment_display = segment_display
-        
+
         # Find which segments have enough data and cache data for each
         available_segments = []
         self._cached_segment_data = {}
         self._cached_full_segment_data = {}  # Cache full dataset for rolling calculations
-        
-        # Also cache comparison data if available
+
+        # Prepare comparison data if active
         comparison_data = {}
         comparison_full_data = {}
+        comparison_detailed = []
+        all_comparison_matches = []
+
         if self.ui.comparison_active:
             comparison_matches = self.ui._get_all_filtered_comparison_matches()
-            comparison_detailed = [m for m in comparison_matches if m.has_detailed_data]
-            comparison_detailed.sort(key=lambda x: x.date)
-            
-            # Get all comparison matches for rolling calculations
-            all_comparison_matches = [m for m in self.ui.comparison_analyzer.matches if m.has_detailed_data]
-            all_comparison_matches.sort(key=lambda x: x.date)
-        
-        for seg in segment_names:
-            # Collect filtered data (for display)
-            times = []
-            dates = []
-            matches = []  # Store match objects for click detection
-            for match in detailed_matches:
-                if seg in match.segments:
-                    # For game_end, only include if user actually completed the run
-                    if seg == 'game_end' and not match.user_completed:
-                        continue
-                    
-                    # For incomplete matches (draw/forfeit), skip the last segment for splits
-                    if show_splits and (match.is_draw or match.forfeited):
-                        last_segment = None
-                        for s in segment_names:
-                            if s in match.segments:
-                                last_segment = s
-                        if seg == last_segment:
-                            continue
-                    
-                    if show_splits:
-                        time_val = match.segments[seg]['split_time'] / 1000 / 60
-                    else:
-                        time_val = match.segments[seg]['absolute_time'] / 1000 / 60
-                    times.append(time_val)
-                    dates.append(match.datetime_obj)
-                    matches.append(match)
-            
-            # Collect full filtered data (for rolling calculations)
-            full_times = []
-            full_dates = []
-            for match in all_detailed_matches:
-                if seg in match.segments:
-                    # Same filtering logic but on all matches
-                    if seg == 'game_end' and not match.user_completed:
-                        continue
-                    if show_splits and (match.is_draw or match.forfeited):
-                        last_segment = None
-                        for s in segment_names:
-                            if s in match.segments:
-                                last_segment = s
-                        if seg == last_segment:
-                            continue
-                    
-                    if show_splits:
-                        time_val = match.segments[seg]['split_time'] / 1000 / 60
-                    else:
-                        time_val = match.segments[seg]['absolute_time'] / 1000 / 60
-                    full_times.append(time_val)
-                    full_dates.append(match.datetime_obj)
-            
-            # Cache comparison data for this segment if available
-            comp_times = []
-            comp_dates = []
-            comp_matches = []
-            comp_full_times = []
-            comp_full_dates = []
-            if self.ui.comparison_active:
-                # Filtered comparison data
-                for match in comparison_detailed:
-                    if seg in match.segments:
-                        # Same filtering logic as main player
-                        if seg == 'game_end' and not match.user_completed:
-                            continue
-                        if show_splits and (match.is_draw or match.forfeited):
-                            last_segment = None
-                            for s in segment_names:
-                                if s in match.segments:
-                                    last_segment = s
-                            if seg == last_segment:
-                                continue
-                        
-                        if show_splits:
-                            time_val = match.segments[seg]['split_time'] / 1000 / 60
-                        else:
-                            time_val = match.segments[seg]['absolute_time'] / 1000 / 60
-                        comp_times.append(time_val)
-                        comp_dates.append(match.datetime_obj)
-                        comp_matches.append(match)
-                
-                # Full comparison data
-                for match in all_comparison_matches:
-                    if seg in match.segments:
-                        # Same filtering logic
-                        if seg == 'game_end' and not match.user_completed:
-                            continue
-                        if show_splits and (match.is_draw or match.forfeited):
-                            last_segment = None
-                            for s in segment_names:
-                                if s in match.segments:
-                                    last_segment = s
-                            if seg == last_segment:
-                                continue
-                        
-                        if show_splits:
-                            time_val = match.segments[seg]['split_time'] / 1000 / 60
-                        else:
-                            time_val = match.segments[seg]['absolute_time'] / 1000 / 60
-                        comp_full_times.append(time_val)
-                        comp_full_dates.append(match.datetime_obj)
-            
-            if len(times) >= 5:
+            comparison_detailed = sorted(
+                [m for m in comparison_matches if m.has_detailed_data],
+                key=lambda x: x.date
+            )
+            all_comparison_matches = sorted(
+                [m for m in self.ui.comparison_analyzer.matches if m.has_detailed_data],
+                key=lambda x: x.date
+            )
+
+        for seg in self.SEGMENT_NAMES:
+            # Collect main player data using helper method
+            main_data = self._collect_segment_data(detailed_matches, seg, show_splits)
+            full_data = self._collect_segment_data(all_detailed_matches, seg, show_splits)
+
+            if len(main_data['times']) >= 5:
                 available_segments.append(seg)
-                self._cached_segment_data[seg] = {'times': times, 'dates': dates, 'matches': matches}
-                self._cached_full_segment_data[seg] = {'times': full_times, 'dates': full_dates}
-                if comp_times and len(comp_times) >= 3:  # Lower threshold for comparison
-                    comparison_data[seg] = {'times': comp_times, 'dates': comp_dates, 'matches': comp_matches}
-                if comp_full_times and len(comp_full_times) >= 3:
-                    comparison_full_data[seg] = {'times': comp_full_times, 'dates': comp_full_dates}
+                self._cached_segment_data[seg] = main_data
+                self._cached_full_segment_data[seg] = {
+                    'times': full_data['times'],
+                    'dates': full_data['dates']
+                }
+
+                # Collect comparison data if active
+                if self.ui.comparison_active:
+                    comp_data = self._collect_segment_data(comparison_detailed, seg, show_splits)
+                    comp_full = self._collect_segment_data(all_comparison_matches, seg, show_splits)
+
+                    if len(comp_data['times']) >= 3:  # Lower threshold for comparison
+                        comparison_data[seg] = comp_data
+                    if len(comp_full['times']) >= 3:
+                        comparison_full_data[seg] = {
+                            'times': comp_full['times'],
+                            'dates': comp_full['dates']
+                        }
         
         if not available_segments:
             messagebox.showinfo("Info", "Not enough segment data available")
