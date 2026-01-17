@@ -125,16 +125,26 @@ class TableWidget(tk.Frame):
 
 class SimpleTableWidget(tk.Frame):
     """A simpler table widget using labels with custom line drawing."""
-    
-    def __init__(self, parent, headers: List[str], rows: List[List[str]], 
-                 theme="dark", **kwargs):
-        """Initialize simple table with label-based cells and drawn borders."""
+
+    def __init__(self, parent, headers: List[str], rows: List[List[str]],
+                 theme="dark", cell_colors: Optional[List[List[Optional[str]]]] = None, **kwargs):
+        """
+        Initialize simple table with label-based cells and drawn borders.
+
+        Args:
+            parent: Parent tkinter widget
+            headers: List of column headers
+            rows: List of row data (each row is a list of strings)
+            theme: Color theme ("dark" or "light")
+            cell_colors: Optional list of lists with cell foreground colors (None uses default)
+        """
         super().__init__(parent, **kwargs)
-        
+
         self.headers = headers
         self.rows = rows
         self.theme = theme
-        
+        self.cell_colors = cell_colors
+
         # Configure colors
         if theme == "dark":
             self.colors = {
@@ -152,10 +162,10 @@ class SimpleTableWidget(tk.Frame):
                 'header_fg': '#2d2d2d',
                 'border': '#d1d9e0'
             }
-        
+
         self.configure(bg=self.colors['bg'], relief='solid', borderwidth=1)
         self._create_simple_table()
-    
+
     def _create_simple_table(self):
         """Create table using grid layout with labels."""
         # Create header row
@@ -173,18 +183,25 @@ class SimpleTableWidget(tk.Frame):
                 borderwidth=1
             )
             header_label.grid(row=0, column=col, sticky='ew')
-        
+
         # Create data rows
         for row_idx, row in enumerate(self.rows, start=1):
             for col_idx, cell in enumerate(row):
                 # Use alternating row colors
                 bg_color = self.colors['bg'] if row_idx % 2 == 1 else '#252526' if self.theme == "dark" else '#f6f8fa'
-                
+
+                # Get cell-specific foreground color if provided
+                fg_color = self.colors['fg']
+                if self.cell_colors and row_idx - 1 < len(self.cell_colors):
+                    row_colors = self.cell_colors[row_idx - 1]
+                    if row_colors and col_idx < len(row_colors) and row_colors[col_idx]:
+                        fg_color = row_colors[col_idx]
+
                 cell_label = tk.Label(
                     self,
                     text=str(cell),
                     bg=bg_color,
-                    fg=self.colors['fg'],
+                    fg=fg_color,
                     font=('Segoe UI', 9),
                     anchor='w',
                     padx=10,
@@ -193,7 +210,7 @@ class SimpleTableWidget(tk.Frame):
                     borderwidth=1
                 )
                 cell_label.grid(row=row_idx, column=col_idx, sticky='ew')
-        
+
         # Configure column weights for proper expansion
         for col in range(len(self.headers)):
             self.grid_columnconfigure(col, weight=1)
@@ -341,12 +358,13 @@ class AdvancedTableWidget(tk.Frame):
             self.grid_columnconfigure(col, weight=1, minsize=60)
 
 
-def create_clean_table(parent, headers: List[str], rows: List[List[str]], 
+def create_clean_table(parent, headers: List[str], rows: List[List[str]],
                       theme="dark", simple=False, advanced=False,
-                      main_headers=None, sub_headers=None) -> tk.Widget:
+                      main_headers=None, sub_headers=None,
+                      cell_colors: Optional[List[List[Optional[str]]]] = None) -> tk.Widget:
     """
     Factory function to create a clean table widget.
-    
+
     Args:
         parent: Parent widget
         headers: Column headers (used for simple/standard tables)
@@ -356,13 +374,14 @@ def create_clean_table(parent, headers: List[str], rows: List[List[str]],
         advanced: Use advanced table with main/sub headers
         main_headers: Main headers for advanced table
         sub_headers: Subheaders for advanced table
-        
+        cell_colors: Optional list of lists with cell foreground colors (for simple tables)
+
     Returns:
         Configured table widget
     """
     if advanced and main_headers and sub_headers:
         return AdvancedTableWidget(parent, main_headers, sub_headers, rows, theme)
     elif simple:
-        return SimpleTableWidget(parent, headers, rows, theme)
+        return SimpleTableWidget(parent, headers, rows, theme, cell_colors=cell_colors)
     else:
         return TableWidget(parent, headers, rows, theme)

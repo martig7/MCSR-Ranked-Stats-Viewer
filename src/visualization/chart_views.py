@@ -210,7 +210,9 @@ class ChartViewBase:
     
     def _on_match_click(self, match):
         """Handle click on a match scatter point to show detailed info"""
-        show_match_info_dialog(self.ui.root, match, self.ui.rich_text_presenter)
+        # Get filtered matches for percentile calculations
+        filtered_matches = self.ui._get_filtered_matches() if hasattr(self.ui, '_get_filtered_matches') else None
+        show_match_info_dialog(self.ui.root, match, self.ui.rich_text_presenter, filtered_matches)
 
 
 class ProgressionChart(ChartViewBase):

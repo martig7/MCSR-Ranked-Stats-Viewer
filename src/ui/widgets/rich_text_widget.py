@@ -216,26 +216,27 @@ class RichTextWidget(tk.Text):
         separator = char * width
         self.add_line(separator, ['separator'])
     
-    def add_table(self, headers: List[str], rows: List[List[str]], 
-                  column_widths: Optional[List[int]] = None, 
-                  advanced=False, main_headers=None, sub_headers=None):
+    def add_table(self, headers: List[str], rows: List[List[str]],
+                  column_widths: Optional[List[int]] = None,
+                  advanced=False, main_headers=None, sub_headers=None,
+                  cell_colors: Optional[List[List[Optional[str]]]] = None):
         """Add a clean table using proper widget instead of ASCII art."""
         if not rows:
             self.add_line("No data available", ['muted'])
             return
-        
+
         # Import table widget
         from .table_widget import create_clean_table
-        
+
         # Create a frame to hold the table
         table_frame = tk.Frame(self, bg=self.colors['bg'])
-        
+
         # Create the clean table
         if advanced and main_headers and sub_headers:
             table_widget = create_clean_table(
-                table_frame, 
-                headers, 
-                rows, 
+                table_frame,
+                headers,
+                rows,
                 theme=self.theme,
                 advanced=True,
                 main_headers=main_headers,
@@ -243,15 +244,16 @@ class RichTextWidget(tk.Text):
             )
         else:
             table_widget = create_clean_table(
-                table_frame, 
-                headers, 
-                rows, 
+                table_frame,
+                headers,
+                rows,
                 theme=self.theme,
-                simple=True  # Use simple version for better integration
+                simple=True,  # Use simple version for better integration
+                cell_colors=cell_colors
             )
-        
+
         table_widget.pack(fill=tk.BOTH, expand=True)
-        
+
         # Insert the table frame into the text widget
         self.window_create(tk.END, window=table_frame)
         self.add_line()  # Add spacing after table
