@@ -55,6 +55,7 @@ class MCSRStatsUI:
             'show_rolling_std': False,
             'show_pb_line': True,
             'show_grid': True,
+            'log_scale': False,
             'color_palette': 'default',
             'point_size': 30,
             'line_width': 2,
@@ -476,7 +477,8 @@ class MCSRStatsUI:
         self.chart_options['show_rolling_std'] = self.show_std_var.get()
         self.chart_options['show_pb_line'] = self.show_pb_var.get()
         self.chart_options['show_grid'] = self.show_grid_var.get()
-        
+        self.chart_options['log_scale'] = self.show_log_scale_var.get()
+
         # Refresh the current chart if applicable
         if self.analyzer and self.notebook.index(self.notebook.select()) == 1:
             # Determine which chart is currently displayed and refresh it
@@ -523,6 +525,7 @@ class MCSRStatsUI:
             self.show_std_var.set(options['show_rolling_std'])
             self.show_pb_var.set(options['show_pb_line'])
             self.show_grid_var.set(options['show_grid'])
+            self.show_log_scale_var.set(options['log_scale'])
             
             # Update chart builder palette
             self.chart_builder.set_palette(options['color_palette'])
