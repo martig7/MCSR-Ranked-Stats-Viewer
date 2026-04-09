@@ -137,6 +137,10 @@ class Match:
         """Get the match status from the analyzed user's perspective"""
         if self.forfeited:
             if self.is_user_win is True:
+                # If user actually completed (dragon kill), it's a real win,
+                # not just a forfeit win - the opponent was auto-forfeited
+                if self.user_completed:
+                    return "Won"
                 return "Forfeit Win"
             elif self.is_user_win is False:
                 return "Forfeit Loss"

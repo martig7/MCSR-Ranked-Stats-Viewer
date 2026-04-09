@@ -29,8 +29,8 @@ def categorize_matches(matches: List[Match]) -> Dict[str, List[Match]]:
     losses = [m for m in matches if m.is_user_win is False]
     draws = [m for m in matches if m.is_draw]
     forfeits = [m for m in matches if m.forfeited and m.is_user_win is None and not m.is_draw]
-    completions = [m for m in matches if m.user_completed and m.match_time is not None and not m.is_draw and not m.forfeited]
-    solo_completions = [m for m in matches if m.player_count == 1 and m.user_completed and not m.forfeited]
+    completions = [m for m in matches if m.user_completed and m.match_time is not None and not m.is_draw]
+    solo_completions = [m for m in matches if m.player_count == 1 and m.user_completed]
     
     return {
         'wins': wins,

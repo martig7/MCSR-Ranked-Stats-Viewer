@@ -548,10 +548,10 @@ class RichTextPresenter:
         losses = [m for m in all_matches if m.is_user_win is False]
         draws = [m for m in all_matches if m.is_draw]
         forfeits = [m for m in all_matches if m.forfeited and m.is_user_win is None and not m.is_draw]
-        solo_completions = [m for m in all_matches if m.player_count == 1 and m.user_completed and not m.forfeited]
+        solo_completions = [m for m in all_matches if m.player_count == 1 and m.user_completed]
         
         # Get completed runs for time stats
-        completed_runs = [m for m in all_matches if m.user_completed and m.match_time is not None and not m.is_draw and not m.forfeited]
+        completed_runs = [m for m in all_matches if m.user_completed and m.match_time is not None and not m.is_draw]
         
         if not completed_runs:
             widget.add_text("No completed runs found with valid completion times.", ['warning'])
@@ -613,7 +613,7 @@ class RichTextPresenter:
         header.render(widget)
         
         # Get completed runs
-        completed_runs = [m for m in all_matches if m.user_completed and m.match_time is not None and not m.is_draw and not m.forfeited]
+        completed_runs = [m for m in all_matches if m.user_completed and m.match_time is not None and not m.is_draw]
         
         if not completed_runs:
             widget.add_text("No completed runs found with valid completion times.", ['warning'])
@@ -838,8 +838,8 @@ class RichTextPresenter:
         widget.add_line()
         
         # Get completed runs for both players
-        p1_completed = [m for m in player1_matches if m.user_completed and m.match_time and not m.is_draw and not m.forfeited]
-        p2_completed = [m for m in player2_matches if m.user_completed and m.match_time and not m.is_draw and not m.forfeited]
+        p1_completed = [m for m in player1_matches if m.user_completed and m.match_time and not m.is_draw]
+        p2_completed = [m for m in player2_matches if m.user_completed and m.match_time and not m.is_draw]
         
         if not p1_completed and not p2_completed:
             widget.add_text("No completed runs found for either player.", ['warning'])
@@ -929,8 +929,8 @@ class RichTextPresenter:
         losses = [m for m in matches if m.is_user_win is False] 
         draws = [m for m in matches if m.is_draw]
         forfeits = [m for m in matches if m.forfeited and m.is_user_win is None and not m.is_draw]
-        solo_completions = [m for m in matches if m.player_count == 1 and m.user_completed and not m.forfeited]
-        completed_runs = [m for m in matches if m.user_completed and m.match_time and not m.is_draw and not m.forfeited]
+        solo_completions = [m for m in matches if m.player_count == 1 and m.user_completed]
+        completed_runs = [m for m in matches if m.user_completed and m.match_time and not m.is_draw]
         
         # Calculate rates
         competitive_matches = len(wins) + len(losses)

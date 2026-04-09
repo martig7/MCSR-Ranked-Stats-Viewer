@@ -10,7 +10,7 @@ rich_text_presenter.py, segment_analysis.py, match_info_dialog.py).
 SEGMENT_DISPLAY_NAMES = {
     'nether_enter': 'Nether Enter',
     'bastion_enter': 'Bastion Enter',
-    'fortress_enter': 'Fortress Enter',
+    'fortress_enter': 'First Blaze Rod',
     'blind_portal': 'Blind Portal',
     'stronghold_enter': 'Stronghold Enter',
     'end_enter': 'End Enter',

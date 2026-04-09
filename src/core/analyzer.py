@@ -98,6 +98,9 @@ class MCSRAnalyzer:
                 
                 match.segments = segments
                 match.has_detailed_data = bool(segments)
+                # Restore user_completed from cache (for forfeit wins where user killed dragon)
+                if cached_data.get('user_completed') and not match.user_completed:
+                    match.user_completed = True
                 if match.has_detailed_data:
                     applied_count += 1
         
@@ -121,6 +124,8 @@ class MCSRAnalyzer:
                 try:
                     with open(season_cache_file, 'r') as f:
                         cached_data = json.load(f)
+                        # Filter to only include ANY category matches
+                        cached_data = [d for d in cached_data if d.get('category') == 'ANY']
                         season_matches = [Match(data, self.username) for data in cached_data]
                         all_matches.extend(season_matches)
                 except Exception:
@@ -170,11 +175,13 @@ class MCSRAnalyzer:
                 if response.status_code == 200:
                     data = response.json()
                     batch_matches = data.get('data', [])
-                    print(f"DEBUG: Season {season} batch returned {len(batch_matches)} matches")
-                    
+                    # Filter to only include ANY category matches
+                    batch_matches = [m for m in batch_matches if m.get('category') == 'ANY']
+                    print(f"DEBUG: Season {season} batch returned {len(batch_matches)} ANY category matches")
+
                     if not batch_matches:
                         break
-                        
+
                     matches.extend(batch_matches)
                     before_id = batch_matches[-1]['id']  # Use last match ID for next batch
                     
@@ -203,6 +210,9 @@ class MCSRAnalyzer:
                         # New format: already processed Match objects
                         self.matches = []
                         for match_dict in cached_data:
+                            # Filter to only include ANY category matches
+                            if match_dict.get('category') != 'ANY':
+                                continue
                             match = Match.__new__(Match)  # Create without calling __init__
                             match.__dict__.update(match_dict)
                             # Convert datetime string back to datetime object if needed
@@ -210,7 +220,8 @@ class MCSRAnalyzer:
                                 match.datetime_obj = datetime.fromisoformat(match.datetime_obj.replace('Z', '+00:00'))
                             self.matches.append(match)
                     else:
-                        # Old format: raw API data
+                        # Old format: raw API data - filter to only include ANY category
+                        cached_data = [d for d in cached_data if d.get('category') == 'ANY']
                         self.matches = [Match(data, self.username) for data in cached_data]
                     
                     print(f"DEBUG: Loaded {len(self.matches)} matches from cache")
@@ -314,11 +325,13 @@ class MCSRAnalyzer:
                 if response.status_code == 200:
                     data = response.json()
                     batch_matches = data.get('data', [])
-                    print(f"DEBUG: Current season batch returned {len(batch_matches)} matches")
-                    
+                    # Filter to only include ANY category matches
+                    batch_matches = [m for m in batch_matches if m.get('category') == 'ANY']
+                    print(f"DEBUG: Current season batch returned {len(batch_matches)} ANY category matches")
+
                     if not batch_matches:
                         break
-                        
+
                     matches_data.extend(batch_matches)
                     before_id = batch_matches[-1]['id']
                     
@@ -374,10 +387,9 @@ class MCSRAnalyzer:
         # Apply completed_only filter first (most restrictive)
         if kwargs.get('completed_only', False):
             filtered = [m for m in filtered if (
-                m.user_completed and 
-                m.match_time is not None and 
-                not m.is_draw and 
-                not m.forfeited
+                m.user_completed and
+                m.match_time is not None and
+                not m.is_draw
             )]
         
         # User completion filter
@@ -687,7 +699,7 @@ class MCSRAnalyzer:
                         segment_mappings = {
                             'story.enter_the_nether': 'nether_enter',
                             'nether.find_bastion': 'bastion_enter',
-                            'nether.find_fortress': 'fortress_enter',
+                            'nether.obtain_blaze_rod': 'fortress_enter',  # "Into Fire" advancement
                             'projectelo.timeline.blind_travel': 'blind_portal',
                             'story.follow_ender_eye': 'stronghold_enter',
                             'story.enter_the_end': 'end_enter',
@@ -695,21 +707,32 @@ class MCSRAnalyzer:
                             # game_end should use actual completion time, not dragon kill time
                         }
                         
+                        user_has_dragon_death = False
                         for event in data['timelines']:
                             event_type = event.get('type')
                             event_time = event.get('time')
                             player_uuid = event.get('uuid')
-                            
-                            # Only track events for the analyzed user
-                            if (event_type in segment_mappings and 
-                                event_time is not None and 
+
+                            # Check if the analyzed user killed the dragon
+                            if (event_type == 'projectelo.timeline.dragon_death' and
                                 player_uuid == match.user_uuid):
-                                
+                                user_has_dragon_death = True
+
+                            # Only track events for the analyzed user
+                            if (event_type in segment_mappings and
+                                event_time is not None and
+                                player_uuid == match.user_uuid):
+
                                 segment_name = segment_mappings[event_type]
                                 segments[segment_name] = {
                                     'absolute_time': event_time
                                 }
-                    
+
+                        # If the user killed the dragon in a forfeited match,
+                        # they actually completed - the opponent was auto-forfeited
+                        if user_has_dragon_death and match.forfeited and match.is_user_win is True:
+                            match.user_completed = True
+
                     # Handle game_end separately using actual completion time (not dragon death)
                     # Only add game_end if the user actually completed the run
                     if match.user_completed and match.match_time is not None:
@@ -752,7 +775,8 @@ class MCSRAnalyzer:
                     # Cache the data
                     segment_cache[str(match.id)] = {
                         'segments': segments,
-                        'fetched_at': time.time()
+                        'fetched_at': time.time(),
+                        'user_completed': match.user_completed
                     }
                     
                     fetched_count += 1
@@ -820,12 +844,16 @@ class MCSRAnalyzer:
             
             for match_data in season_matches_sorted:
                 match_id = match_data['id']
-                
+
                 if match_id in existing_match_ids:
                     print(f"DEBUG: Found existing match {match_id}, stopping incremental fetch")
                     found_existing = True
                     break
-                
+
+                # Only record ANY category matches
+                if match_data.get('category') != 'ANY':
+                    continue
+
                 new_matches_this_season.append(Match(match_data, self.username))
                 total_fetched += 1
                 
@@ -850,14 +878,17 @@ class MCSRAnalyzer:
                 with open(self.cache_file, 'r') as f:
                     cached_data = json.load(f)
                     if isinstance(cached_data, list) and len(cached_data) > 0:
-                        if isinstance(cached_data[0], dict) and 'id' in cached_data[0]:
-                            # New format: match objects
-                            existing_matches = [Match(data, self.username) for data in cached_data]
-                        else:
-                            # Old format: raw API data
-                            existing_matches = [Match(data, self.username) for data in cached_data]
-                        
-                        all_new_matches.extend(existing_matches)
+                        # Filter to only include ANY category matches
+                        cached_data = [d for d in cached_data if d.get('category') == 'ANY']
+                        if cached_data:  # Check if any matches remain after filtering
+                            if isinstance(cached_data[0], dict) and 'id' in cached_data[0]:
+                                # New format: match objects
+                                existing_matches = [Match(data, self.username) for data in cached_data]
+                            else:
+                                # Old format: raw API data
+                                existing_matches = [Match(data, self.username) for data in cached_data]
+
+                            all_new_matches.extend(existing_matches)
             except Exception:
                 pass
         
