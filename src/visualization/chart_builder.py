@@ -5,6 +5,7 @@ Provides centralized chart creation with consistent styling and user customizati
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker
+import math
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import statistics
@@ -599,7 +600,7 @@ class ChartBuilder:
         return self
         
     def set_log_scale(self, ax: plt.Axes, enabled: bool, time_formatter=None):
-        """Set Y-axis to logarithmic scale with time-formatted tick labels.
+        """Set Y-axis to logarithmic scale with evenly log-spaced tick grid and MM:SS labels.
 
         Args:
             ax: Matplotlib axes to modify
@@ -611,9 +612,23 @@ class ChartBuilder:
             return
         ax.set_yscale('log')
         fmt = time_formatter or (lambda x: f"{x:.2f}")
+
+        # Generate 8 evenly log-spaced tick positions across the plotted data range
+        ymin, ymax = ax.get_ylim()
+        if ymin > 0 and ymax > ymin:
+            log_min = math.log10(ymin)
+            log_max = math.log10(ymax)
+            n_ticks = 8
+            ticks = [10 ** (log_min + i * (log_max - log_min) / (n_ticks - 1))
+                     for i in range(n_ticks)]
+            ax.set_yticks(ticks)
+            ax.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+
         ax.yaxis.set_major_formatter(
             matplotlib.ticker.FuncFormatter(lambda x, _: fmt(x))
         )
+        # Always show grid at the tick positions when log scale is active
+        ax.grid(True, which='major', alpha=0.3)
 
     def set_legend(self, ax: plt.Axes, loc: str = 'best'):
         """Add legend to the axis"""
