@@ -4,6 +4,7 @@ Provides centralized chart creation with consistent styling and user customizati
 """
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import statistics
@@ -597,6 +598,23 @@ class ChartBuilder:
             ax.grid(False)
         return self
         
+    def set_log_scale(self, ax: plt.Axes, enabled: bool, time_formatter=None):
+        """Set Y-axis to logarithmic scale with time-formatted tick labels.
+
+        Args:
+            ax: Matplotlib axes to modify
+            enabled: If True, apply log scale; if False, no-op
+            time_formatter: Function(float) -> str for formatting tick labels
+                           (e.g. _minutes_to_str). Falls back to decimal minutes.
+        """
+        if not enabled:
+            return
+        ax.set_yscale('log')
+        fmt = time_formatter or (lambda x: f"{x:.2f}")
+        ax.yaxis.set_major_formatter(
+            matplotlib.ticker.FuncFormatter(lambda x, _: fmt(x))
+        )
+
     def set_legend(self, ax: plt.Axes, loc: str = 'best'):
         """Add legend to the axis"""
         ax.legend(facecolor=self.theme['legend_bg'], 
