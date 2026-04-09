@@ -337,7 +337,16 @@ class MainContent:
             command=self.ui._on_chart_option_change
         )
         self.ui.grid_check.pack(side=tk.RIGHT, padx=5)
-        
+
+        self.ui.show_log_scale_var = tk.BooleanVar(value=False)
+        self.ui.log_scale_check = ttk.Checkbutton(
+            self.ui.chart_options_frame,
+            text="Log Scale",
+            variable=self.ui.show_log_scale_var,
+            command=self.ui._on_chart_option_change
+        )
+        self.ui.log_scale_check.pack(side=tk.RIGHT, padx=5)
+
         # Create matplotlib figure
         self.ui.fig = Figure(figsize=(10, 6), dpi=100)
         self.ui.fig.patch.set_facecolor('#2d2d2d')
