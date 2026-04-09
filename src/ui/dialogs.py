@@ -276,10 +276,15 @@ class ChartOptionsDialog:
         self.show_grid = tk.BooleanVar(value=self.chart_options['show_grid'])
         ttk.Checkbutton(main_frame, text="Show Grid", variable=self.show_grid).grid(
             row=10, column=0, columnspan=2, sticky='w', pady=2)
-        
+
+        self.show_log_scale = tk.BooleanVar(value=self.chart_options.get('log_scale', False))
+        ttk.Checkbutton(main_frame, text="Log Scale (Y-axis, progression chart only)",
+                        variable=self.show_log_scale).grid(
+            row=11, column=0, columnspan=2, sticky='w', pady=2)
+
         # Buttons
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=11, column=0, columnspan=2, pady=20)
+        button_frame.grid(row=12, column=0, columnspan=2, pady=20)
         
         ttk.Button(button_frame, text="Apply", command=self._apply).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Reset Defaults", command=self._reset_defaults).pack(side=tk.LEFT, padx=5)
@@ -297,6 +302,7 @@ class ChartOptionsDialog:
             'show_rolling_std': self.show_std.get(),
             'show_pb_line': self.show_pb.get(),
             'show_grid': self.show_grid.get(),
+            'log_scale': self.show_log_scale.get(),
         })
         self.dialog.destroy()
     
@@ -311,3 +317,4 @@ class ChartOptionsDialog:
         self.show_std.set(False)
         self.show_pb.set(True)
         self.show_grid.set(True)
+        self.show_log_scale.set(False)
