@@ -339,20 +339,21 @@ class ProgressionChart(ChartViewBase):
         cb.set_labels(ax, title=f'Progression Comparison: {self.ui.analyzer.username} vs {self.ui.comparison_analyzer.username}',
                     xlabel=x_label, ylabel='Time (minutes)')
         cb.set_grid(ax, self.ui.chart_options['show_grid'])
+        cb.set_log_scale(ax, self.ui.chart_options['log_scale'], self.ui._minutes_to_str)
         cb.set_legend(ax)
-        
+
         # Only rotate labels for date mode
         if not use_match_numbers:
             plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
-        
+
         # Enable click detection for match details
         cb.enable_match_click_detection(self._on_match_click)
-        
+
         # Enable hover tooltips for rolling averages
         cb.enable_hover_tooltips(self.ui._minutes_to_str)
-        
+
         cb.finalize()
-    
+
     def _show_single_chart(self, cb, ax, x_data, times, matches, x_label, use_match_numbers):
         """Show progression chart for single player"""
         # Scatter plot
@@ -389,18 +390,19 @@ class ProgressionChart(ChartViewBase):
                      title=f'{self.ui.analyzer.username} - Performance Progression',
                      xlabel=x_label, ylabel='Time (minutes)')
         cb.set_grid(ax, self.ui.chart_options['show_grid'])
+        cb.set_log_scale(ax, self.ui.chart_options['log_scale'], self.ui._minutes_to_str)
         cb.set_legend(ax)
-        
+
         # Only rotate labels for date mode
         if not use_match_numbers:
             plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
-        
+
         # Enable click detection for match details
         cb.enable_match_click_detection(self._on_match_click)
-        
+
         # Enable hover tooltips for rolling averages
         cb.enable_hover_tooltips(self.ui._minutes_to_str)
-        
+
         cb.finalize()
 
 
