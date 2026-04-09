@@ -212,15 +212,8 @@ class ChartOptionsDialog:
         """Create and display the dialog."""
         self.dialog = tk.Toplevel(self.parent)
         self.dialog.title("Chart Options")
-        self.dialog.geometry(f"{self.size[0]}x{self.size[1]}")
         self.dialog.transient(self.parent)
         self.dialog.grab_set()
-        
-        # Center the dialog
-        self.dialog.update_idletasks()
-        x = (self.dialog.winfo_screenwidth() - self.dialog.winfo_width()) // 2
-        y = (self.dialog.winfo_screenheight() - self.dialog.winfo_height()) // 2
-        self.dialog.geometry(f"+{x}+{y}")
         
         main_frame = ttk.Frame(self.dialog, padding=20)
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -289,6 +282,12 @@ class ChartOptionsDialog:
         ttk.Button(button_frame, text="Apply", command=self._apply).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Reset Defaults", command=self._reset_defaults).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=self.dialog.destroy).pack(side=tk.LEFT, padx=5)
+
+        # Center over parent after content is laid out
+        self.dialog.update_idletasks()
+        x = (self.dialog.winfo_screenwidth() - self.dialog.winfo_width()) // 2
+        y = (self.dialog.winfo_screenheight() - self.dialog.winfo_height()) // 2
+        self.dialog.geometry(f"+{x}+{y}")
     
     def _apply(self):
         """Apply the current options."""
