@@ -489,7 +489,16 @@ class MCSRStatsUI:
         # Refresh the current chart if applicable
         if self.analyzer and self.notebook.index(self.notebook.select()) == 1:
             self._refresh_current_chart()
-    
+
+    def _on_period_grouping_change(self, event=None):
+        """Handle period grouping dropdown change - refresh completions chart if active"""
+        # Refresh the completions chart if it's currently displayed
+        if (self.analyzer and hasattr(self, 'chart_views') and
+            hasattr(self.chart_views, 'completions') and
+            hasattr(self, '_current_chart_view') and
+            self._current_chart_view == '_show_completions'):
+            self.chart_views.completions.show()
+
     def _refresh_current_chart(self):
         """Refresh the currently displayed chart"""
         # This will be set by each chart method

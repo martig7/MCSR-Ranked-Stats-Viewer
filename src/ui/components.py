@@ -296,7 +296,7 @@ class MainContent:
             width=8,
         )
         self.ui.period_grouping_combo.bind(
-            '<<ComboboxSelected>>', lambda e: self.ui._on_period_grouping_change()
+            '<<ComboboxSelected>>', self.ui._on_period_grouping_change
         )
         # Initially hidden — shown when Completions view is active
 
