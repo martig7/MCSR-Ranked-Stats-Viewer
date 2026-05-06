@@ -577,7 +577,55 @@ class MCSRAnalyzer:
                 seed_data['std_dev'] = 0
         
         return seed_types
-    
+
+    def completions_by_period(
+        self,
+        period: str = 'day',
+        include_private_rooms: bool = True,
+        season_filter: Optional[int] = None,
+        seed_type_filter: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+    ) -> Dict[str, int]:
+        """Return completed-run counts bucketed by time period.
+
+        Args:
+            period: 'day', 'week', or 'month'
+            include_private_rooms: Whether to include private-room matches
+            season_filter: Restrict to a specific season number, or None for all
+            seed_type_filter: Restrict to a specific seed type, or None for all
+            date_from: Inclusive lower bound on match date
+            date_to: Inclusive upper bound on match date
+
+        Returns:
+            Dict mapping period label → count, sorted chronologically.
+        """
+        filters: Dict[str, Any] = {
+            'user_completed': True,
+            'include_private_rooms': include_private_rooms,
+            'date_from': date_from,
+            'date_to': date_to,
+        }
+        if season_filter is not None:
+            filters['seasons'] = [season_filter]
+        if seed_type_filter is not None:
+            filters['seed_types'] = [seed_type_filter]
+
+        matches = self.filter_matches(**filters)
+
+        fmt = {
+            'day':   '%Y-%m-%d',
+            'week':  '%G-W%V',
+            'month': '%Y-%m',
+        }.get(period, '%Y-%m-%d')
+
+        counts: Dict[str, int] = {}
+        for match in matches:
+            label = match.datetime_obj.strftime(fmt)
+            counts[label] = counts.get(label, 0) + 1
+
+        return dict(sorted(counts.items()))
+
     def get_segment_breakdown(self) -> Dict[str, Dict]:
         """Get segment timing statistics"""
         matches_with_segments = [m for m in self.matches if m.has_detailed_data and m.segments]

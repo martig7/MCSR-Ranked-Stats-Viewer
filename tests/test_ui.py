@@ -524,6 +524,115 @@ class TestChartControlsVisibility(unittest.TestCase):
         self.assertNotIn(self.app.back_btn_frame, self.app.chart_frame.pack_slaves())
 
 
+class TestCompletionsByPeriod(unittest.TestCase):
+    """Tests for MCSRAnalyzer.completions_by_period()"""
+
+    def _make_completion_match(self, timestamp, season=1, seed_type='random'):
+        """Return a Match where user_completed=True for the given Unix timestamp."""
+        data = {
+            'id': timestamp,
+            'date': timestamp,
+            'category': 'ANY',
+            'forfeited': False,
+            'seed': None,
+            'seedType': seed_type,
+            'season': season,
+            'type': 1,
+            'players': [{'nickname': 'tester', 'uuid': 'u1', 'eloRate': 1000, 'eloChange': 10}],
+            'result': {'uuid': 'u1', 'time': 300000},
+        }
+        return Match(data, 'tester')
+
+    def _make_analyzer_with(self, matches):
+        analyzer = MCSRAnalyzer.__new__(MCSRAnalyzer)
+        analyzer.matches = matches
+        return analyzer
+
+    def test_day_grouping_counts_correctly(self):
+        from datetime import datetime
+        t1 = int(datetime(2024, 3, 1, 10, 0).timestamp())
+        t2 = int(datetime(2024, 3, 1, 15, 0).timestamp())
+        t3 = int(datetime(2024, 3, 3, 9, 0).timestamp())
+        analyzer = self._make_analyzer_with([
+            self._make_completion_match(t1),
+            self._make_completion_match(t2),
+            self._make_completion_match(t3),
+        ])
+        result = analyzer.completions_by_period('day')
+        self.assertEqual(result.get('2024-03-01'), 2)
+        self.assertEqual(result.get('2024-03-03'), 1)
+        self.assertEqual(len(result), 2)
+
+    def test_week_grouping(self):
+        from datetime import datetime
+        # 2024-03-04 (Mon) and 2024-03-05 (Tue) are both ISO week 10
+        t1 = int(datetime(2024, 3, 4, 10, 0).timestamp())
+        t2 = int(datetime(2024, 3, 5, 10, 0).timestamp())
+        # 2024-03-11 (Mon) is ISO week 11
+        t3 = int(datetime(2024, 3, 11, 10, 0).timestamp())
+        analyzer = self._make_analyzer_with([
+            self._make_completion_match(t1),
+            self._make_completion_match(t2),
+            self._make_completion_match(t3),
+        ])
+        result = analyzer.completions_by_period('week')
+        self.assertEqual(result.get('2024-W10'), 2)
+        self.assertEqual(result.get('2024-W11'), 1)
+
+    def test_month_grouping(self):
+        from datetime import datetime
+        t1 = int(datetime(2024, 1, 5, 10, 0).timestamp())
+        t2 = int(datetime(2024, 1, 20, 10, 0).timestamp())
+        t3 = int(datetime(2024, 2, 3, 10, 0).timestamp())
+        analyzer = self._make_analyzer_with([
+            self._make_completion_match(t1),
+            self._make_completion_match(t2),
+            self._make_completion_match(t3),
+        ])
+        result = analyzer.completions_by_period('month')
+        self.assertEqual(result.get('2024-01'), 2)
+        self.assertEqual(result.get('2024-02'), 1)
+
+    def test_excludes_non_completed_matches(self):
+        from datetime import datetime
+        t1 = int(datetime(2024, 3, 1, 10, 0).timestamp())
+        data = {
+            'id': t1, 'date': t1, 'category': 'ANY', 'forfeited': True,
+            'seed': None, 'seedType': 'random', 'season': 1, 'type': 1,
+            'players': [{'nickname': 'tester', 'uuid': 'u1', 'eloRate': 1000, 'eloChange': 10},
+                        {'nickname': 'other',  'uuid': 'u2', 'eloRate': 900,  'eloChange': -10}],
+            'result': {'uuid': 'u2', 'time': 290000},
+        }
+        loss_match = Match(data, 'tester')  # user lost
+        analyzer = self._make_analyzer_with([loss_match])
+        result = analyzer.completions_by_period('day')
+        self.assertEqual(len(result), 0)
+
+    def test_result_is_sorted_chronologically(self):
+        from datetime import datetime
+        t_early = int(datetime(2024, 1, 1, 10, 0).timestamp())
+        t_late  = int(datetime(2024, 6, 1, 10, 0).timestamp())
+        analyzer = self._make_analyzer_with([
+            self._make_completion_match(t_late),
+            self._make_completion_match(t_early),
+        ])
+        result = analyzer.completions_by_period('month')
+        keys = list(result.keys())
+        self.assertEqual(keys, sorted(keys))
+
+    def test_season_filter(self):
+        from datetime import datetime
+        t1 = int(datetime(2024, 3, 1, 10, 0).timestamp())
+        t2 = int(datetime(2024, 3, 2, 10, 0).timestamp())
+        analyzer = self._make_analyzer_with([
+            self._make_completion_match(t1, season=5),
+            self._make_completion_match(t2, season=6),
+        ])
+        result = analyzer.completions_by_period('day', season_filter=5)
+        self.assertIn('2024-03-01', result)
+        self.assertNotIn('2024-03-02', result)
+
+
 def run_tests():
     """Run all tests"""
     # Create test suite
@@ -542,7 +651,8 @@ def run_tests():
     suite.addTests(loader.loadTestsFromTestCase(TestMatchBrowser))
     suite.addTests(loader.loadTestsFromTestCase(TestUtilityMethods))
     suite.addTests(loader.loadTestsFromTestCase(TestChartControlsVisibility))
-    
+    suite.addTests(loader.loadTestsFromTestCase(TestCompletionsByPeriod))
+
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
