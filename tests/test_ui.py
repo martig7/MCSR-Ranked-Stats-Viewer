@@ -682,12 +682,66 @@ class TestCompletionsByPeriod(unittest.TestCase):
         self.assertNotIn('2024-03-02', result)
 
 
+class TestCompletionsChart(unittest.TestCase):
+    """Tests for CompletionsChart chart view"""
+
+    def setUp(self):
+        self.root = tk.Tk()
+        self.root.withdraw()
+
+    def tearDown(self):
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    def test_completions_chart_registered_on_chart_view_manager(self):
+        app = MCSRStatsUI(self.root)
+        self.assertTrue(hasattr(app.chart_views, 'completions'))
+
+    def test_show_without_analyzer_does_not_crash(self):
+        """Calling show() before any data is loaded must not raise."""
+        app = MCSRStatsUI(self.root)
+        app.analyzer = None
+        app.chart_views.completions.show()  # must not raise
+
+    def test_show_with_insufficient_data_shows_messagebox(self):
+        """Fewer than 2 populated periods triggers an info messagebox."""
+        from unittest.mock import patch, MagicMock
+
+        app = MCSRStatsUI(self.root)
+        mock_analyzer = MagicMock()
+        mock_analyzer.username = 'tester'
+        # Only one period of data
+        mock_analyzer.completions_by_period.return_value = {'2024-01-01': 3}
+        app.analyzer = mock_analyzer
+
+        with patch('tkinter.messagebox.showinfo') as mock_info:
+            app.chart_views.completions.show()
+            mock_info.assert_called_once()
+
+    def test_show_renders_without_error(self):
+        """show() completes without exception when sufficient data is present."""
+        from unittest.mock import MagicMock
+
+        app = MCSRStatsUI(self.root)
+        mock_analyzer = MagicMock()
+        mock_analyzer.username = 'tester'
+        mock_analyzer.completions_by_period.return_value = {
+            '2024-01-01': 2,
+            '2024-01-02': 1,
+            '2024-01-03': 4,
+        }
+        app.analyzer = mock_analyzer
+        app.chart_views.completions.show()  # must not raise
+
+
 def run_tests():
     """Run all tests"""
     # Create test suite
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
-    
+
     # Add all test classes
     suite.addTests(loader.loadTestsFromTestCase(TestUICreation))
     suite.addTests(loader.loadTestsFromTestCase(TestNavigationButtons))
@@ -701,6 +755,7 @@ def run_tests():
     suite.addTests(loader.loadTestsFromTestCase(TestUtilityMethods))
     suite.addTests(loader.loadTestsFromTestCase(TestChartControlsVisibility))
     suite.addTests(loader.loadTestsFromTestCase(TestCompletionsByPeriod))
+    suite.addTests(loader.loadTestsFromTestCase(TestCompletionsChart))
 
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)

@@ -24,17 +24,21 @@ class ChartViewBase:
         self.ui = ui_context
     
     def _prepare_chart(self, view_name: str, chart_view_name: str, show_splits_toggle: bool = False,
-                      show_match_numbers_toggle: bool = False):
+                      show_match_numbers_toggle: bool = False,
+                      show_period_grouping_toggle: bool = False):
         """Common chart preparation logic"""
         self.ui._current_view = view_name
         self.ui.notebook.select(1)  # Charts tab
-        
+
         # Hide segment controls when not viewing segments
         if hasattr(self.ui, 'segment_text_controls_frame'):
             self.ui.segment_text_controls_frame.pack_forget()
-            
-        self.ui._set_chart_controls_visible(show_splits_toggle=show_splits_toggle,
-                                          show_match_numbers_toggle=show_match_numbers_toggle)
+
+        self.ui._set_chart_controls_visible(
+            show_splits_toggle=show_splits_toggle,
+            show_match_numbers_toggle=show_match_numbers_toggle,
+            show_period_grouping_toggle=show_period_grouping_toggle,
+        )
         self.ui._current_chart_view = chart_view_name
         
     def _check_analyzer(self) -> bool:
@@ -955,6 +959,64 @@ if False:  # Disabled ELO chart functionality
 
 # END OF COMMENTED OUT ELO CHART CLASS
 
+class CompletionsChart(ChartViewBase):
+    """Handles completions-per-period chart view"""
+
+    def show(self):
+        """Show completions per day/week/month bar chart with rolling average"""
+        self._prepare_chart('completions', '_show_completions',
+                            show_period_grouping_toggle=True)
+
+        if not self._check_analyzer():
+            return
+
+        period = self.ui.period_grouping_var.get().lower()  # 'day' | 'week' | 'month'
+
+        filters = self._get_filter_settings()
+        data = self.ui.analyzer.completions_by_period(
+            period=period,
+            include_private_rooms=filters['include_private'],
+            season_filter=filters['season_val'],
+            seed_type_filter=filters['seed_val'],
+            date_from=self.ui._filter_date_from,
+            date_to=self.ui._filter_date_to,
+        )
+
+        if not self._validate_data_minimum(list(data.keys()), 2,
+                                           f'{period}s with completions'):
+            return
+
+        labels = list(data.keys())
+        counts = list(data.values())
+        x_pos = list(range(len(labels)))
+
+        cb = self._setup_chart_builder()
+        ax = cb.get_subplot(1, 1, 1)
+
+        cb.plot_bar(ax, x_pos, counts, color_index=0)
+
+        window = self.ui.chart_options['rolling_window']
+        if len(counts) >= window:
+            cb.add_rolling_average(
+                ax, x_pos, counts,
+                window=window,
+                label=f'{window}-period average',
+                color_index=1,
+                is_comparison=False,
+            )
+
+        cb.set_labels(
+            ax,
+            title=f'{self.ui.analyzer.username} - Completions per {period.capitalize()}',
+            xlabel=period.capitalize(),
+            ylabel='Completions',
+        )
+        cb.set_xticks(ax, x_pos, labels, rotation=45, ha='right')
+        cb.set_grid(ax, self.ui.chart_options['show_grid'])
+        cb.set_legend(ax)
+        cb.finalize()
+
+
 class ChartViewManager:
     """Manages all chart views"""
     
@@ -964,4 +1026,5 @@ class ChartViewManager:
         self.season_stats = SeasonStatsChart(ui_context)
         self.seed_types = SeedTypesChart(ui_context)
         self.distribution = DistributionChart(ui_context)
+        self.completions = CompletionsChart(ui_context)
         # self.elo = EloChart(ui_context)  # Commented out - ELO feature not working
