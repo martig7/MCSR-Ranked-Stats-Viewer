@@ -515,6 +515,7 @@ class MCSRStatsUI:
                 '_show_seed_types': lambda: self.chart_views.seed_types.show(),
                 '_show_distribution': lambda: self.chart_views.distribution.show(),
                 '_show_segment_progression': lambda: self.segment_analyzer.show_segment_progression(),
+                '_show_completions': lambda: self.chart_views.completions.show(),
             }
             
             view_method = chart_view_map.get(self._current_chart_view)
