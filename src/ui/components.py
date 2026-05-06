@@ -140,6 +140,7 @@ class Sidebar:
             ("🌱 Seed Types", lambda: self.ui.chart_views.seed_types.show()),
             ("⏱️ Segments", lambda: self.ui.segment_analyzer.show_segments_text()),
             ("📊 Segment Trends", lambda: self.ui.segment_analyzer.show_segment_progression()),
+            ("Completions", lambda: self.ui.chart_views.completions.show()),
             ("📉 Distribution", lambda: self.ui.chart_views.distribution.show()),
             ("🔍 Match Browser", self.ui._show_match_browser),
             ("🚀 All Time Best Pace", self.ui._show_forecast),
@@ -279,7 +280,26 @@ class MainContent:
             command=self.ui._on_match_numbers_toggle
         )
         # Initially hidden - will be shown when date-based progression charts are active
-        
+
+        # Period grouping toggle (shown only for Completions view)
+        self.ui.period_grouping_var = tk.StringVar(value='Day')
+        self.ui.period_grouping_label = ttk.Label(
+            self.ui.view_controls_frame,
+            text="Group by:",
+            font=('Segoe UI', 9),
+        )
+        self.ui.period_grouping_combo = ttk.Combobox(
+            self.ui.view_controls_frame,
+            textvariable=self.ui.period_grouping_var,
+            values=['Day', 'Week', 'Month'],
+            state='readonly',
+            width=8,
+        )
+        self.ui.period_grouping_combo.bind(
+            '<<ComboboxSelected>>', lambda e: self.ui._on_period_grouping_change()
+        )
+        # Initially hidden — shown when Completions view is active
+
         # Right side - general chart options
         self.ui.chart_options_frame = ttk.Frame(self.ui.chart_controls_frame)
         self.ui.chart_options_frame.pack(side=tk.RIGHT, fill=tk.X)

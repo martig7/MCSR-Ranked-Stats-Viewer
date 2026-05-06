@@ -62,7 +62,7 @@ class TestUICreation(unittest.TestCase):
         app = MCSRStatsUI(self.root)
         self.assertIsNotNone(app.sidebar)
         self.assertIsNotNone(app.nav_buttons)
-        self.assertEqual(len(app.nav_buttons), 10)  # 10 navigation buttons (ELO Progress is disabled)
+        self.assertEqual(len(app.nav_buttons), 11)  # 11 navigation buttons (ELO Progress is disabled)
         self.assertIsNotNone(app.quick_stats_frame)
         self.assertIsNotNone(app.quick_stats_labels)
     
@@ -87,6 +87,20 @@ class TestUICreation(unittest.TestCase):
         self.assertIsNotNone(app.show_std_var)
         self.assertIsNotNone(app.show_pb_var)
         self.assertIsNotNone(app.show_grid_var)
+
+    def test_period_grouping_widget_exists(self):
+        """period_grouping_var and combo widget are created on the UI"""
+        app = MCSRStatsUI(self.root)
+        self.assertIsNotNone(app.period_grouping_var)
+        self.assertEqual(app.period_grouping_var.get(), 'Day')
+        self.assertIsNotNone(app.period_grouping_label)
+        self.assertIsNotNone(app.period_grouping_combo)
+
+    def test_sidebar_has_eleven_buttons(self):
+        """Sidebar now has 11 nav buttons (Completions added)"""
+        app = MCSRStatsUI(self.root)
+        self.assertEqual(len(app.nav_buttons), 11)
+        self.assertIn('Completions', app.nav_buttons)
 
 
 class TestNavigationButtons(unittest.TestCase):
