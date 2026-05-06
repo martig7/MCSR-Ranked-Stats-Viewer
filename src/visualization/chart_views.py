@@ -996,7 +996,7 @@ class CompletionsChart(ChartViewBase):
         cb.plot_bar(ax, x_pos, counts, color_index=0)
 
         window = self.ui.chart_options['rolling_window']
-        if len(counts) >= window:
+        if self.ui.chart_options['show_rolling_avg'] and len(counts) >= window:
             cb.add_rolling_average(
                 ax, x_pos, counts,
                 window=window,
