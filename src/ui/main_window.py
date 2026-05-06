@@ -233,6 +233,8 @@ class MCSRStatsUI:
             self.segment_analyzer.show_segment_progression()
         elif self._current_view == 'distribution':
             self.chart_views.distribution.show()
+        elif self._current_view == 'completions':
+            self.chart_views.completions.show()
         elif self._current_view == 'match_browser':
             self._show_match_browser()
         elif self._current_view == 'forecast':
@@ -491,12 +493,8 @@ class MCSRStatsUI:
             self._refresh_current_chart()
 
     def _on_period_grouping_change(self, event=None):
-        """Handle period grouping dropdown change - refresh completions chart if active"""
-        # Refresh the completions chart if it's currently displayed
-        if (self.analyzer and hasattr(self, 'chart_views') and
-            hasattr(self.chart_views, 'completions') and
-            hasattr(self, '_current_chart_view') and
-            self._current_chart_view == '_show_completions'):
+        """Re-render Completions chart when the grouping combobox changes"""
+        if self._current_view == 'completions':
             self.chart_views.completions.show()
 
     def _refresh_current_chart(self):
@@ -548,19 +546,27 @@ class MCSRStatsUI:
             on_apply
         )
     
-    def _set_chart_controls_visible(self, show_splits_toggle: bool, show_back_button: bool = False, 
-                                   show_match_numbers_toggle: bool = False):
+    def _set_chart_controls_visible(self, show_splits_toggle: bool, show_back_button: bool = False,
+                                   show_match_numbers_toggle: bool = False,
+                                   show_period_grouping_toggle: bool = False):
         """Show or hide chart control options based on current view"""
         if show_splits_toggle:
             self.splits_check.pack(side=tk.LEFT)
         else:
             self.splits_check.pack_forget()
-        
+
         if show_match_numbers_toggle:
             self.match_numbers_check.pack(side=tk.LEFT, padx=(10, 0))
         else:
             self.match_numbers_check.pack_forget()
-        
+
+        if show_period_grouping_toggle:
+            self.period_grouping_label.pack(side=tk.LEFT, padx=(10, 2))
+            self.period_grouping_combo.pack(side=tk.LEFT)
+        else:
+            self.period_grouping_label.pack_forget()
+            self.period_grouping_combo.pack_forget()
+
         if show_back_button:
             self.back_btn_frame.pack(fill=tk.X, pady=(0, 5), before=self.chart_controls_frame)
         else:

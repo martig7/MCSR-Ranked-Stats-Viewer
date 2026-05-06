@@ -499,43 +499,78 @@ class TestUtilityMethods(unittest.TestCase):
 
 class TestChartControlsVisibility(unittest.TestCase):
     """Test chart controls visibility management"""
-    
+
     def setUp(self):
         """Set up test fixtures"""
         self.root = tk.Tk()
         self.root.withdraw()
         self.app = MCSRStatsUI(self.root)
-    
+
     def tearDown(self):
         """Clean up after tests"""
         try:
             self.root.destroy()
         except:
             pass
-    
+
     def test_show_splits_toggle(self):
         """Test showing splits toggle"""
         self.app._set_chart_controls_visible(show_splits_toggle=True)
         # Verify splits check is packed
         self.assertIn(self.app.splits_check, self.app.view_controls_frame.pack_slaves())
-    
+
     def test_hide_splits_toggle(self):
         """Test hiding splits toggle"""
         self.app._set_chart_controls_visible(show_splits_toggle=False)
         # Verify splits check is not packed
         self.assertNotIn(self.app.splits_check, self.app.view_controls_frame.pack_slaves())
-    
+
     def test_show_back_button(self):
         """Test showing back button"""
         self.app._set_chart_controls_visible(show_splits_toggle=False, show_back_button=True)
         # Verify back button frame is packed
         self.assertIn(self.app.back_btn_frame, self.app.chart_frame.pack_slaves())
-    
+
     def test_hide_back_button(self):
         """Test hiding back button"""
         self.app._set_chart_controls_visible(show_splits_toggle=False, show_back_button=False)
         # Verify back button frame is not packed
         self.assertNotIn(self.app.back_btn_frame, self.app.chart_frame.pack_slaves())
+
+    def test_period_grouping_toggle_visibility(self):
+        """period grouping widgets are hidden by default, shown when flag is True"""
+        app = MCSRStatsUI(self.root)
+        # Hidden by default — pack_info raises TclError when widget is not packed
+        try:
+            app.period_grouping_label.pack_info()
+            label_packed = True
+        except tk.TclError:
+            label_packed = False
+        self.assertFalse(label_packed, "period_grouping_label should be hidden initially")
+
+        # Show it
+        app._set_chart_controls_visible(
+            show_splits_toggle=False,
+            show_period_grouping_toggle=True,
+        )
+        try:
+            app.period_grouping_label.pack_info()
+            label_packed = True
+        except tk.TclError:
+            label_packed = False
+        self.assertTrue(label_packed, "period_grouping_label should be visible after show")
+
+        # Hide it again
+        app._set_chart_controls_visible(
+            show_splits_toggle=False,
+            show_period_grouping_toggle=False,
+        )
+        try:
+            app.period_grouping_label.pack_info()
+            label_packed = True
+        except tk.TclError:
+            label_packed = False
+        self.assertFalse(label_packed, "period_grouping_label should be hidden again")
 
 
 class TestCompletionsByPeriod(unittest.TestCase):
