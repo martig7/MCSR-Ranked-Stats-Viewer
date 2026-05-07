@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import messagebox
 import matplotlib.pyplot as plt
 import statistics
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 from .match_info_dialog import show_match_info_dialog
 
@@ -963,42 +964,70 @@ class CompletionsChart(ChartViewBase):
     """Handles completions-per-period chart view"""
 
     def show(self):
-        """Show completions per day/week/month bar chart with rolling average"""
+        """Show completions per day/week/month scatter chart with rolling average"""
         self._prepare_chart('completions', '_show_completions',
+                            show_match_numbers_toggle=True,
                             show_period_grouping_toggle=True)
 
         if not self._check_analyzer():
             return
 
         period = self.ui.period_grouping_var.get().lower()  # 'day' | 'week' | 'month'
+        fmt = {'day': '%Y-%m-%d', 'week': '%G-W%V', 'month': '%Y-%m'}[period]
 
         filters = self._get_filter_settings()
-        data = self.ui.analyzer.completions_by_period(
-            period=period,
-            include_private_rooms=filters['include_private'],
-            season_filter=filters['season_val'],
-            seed_type_filter=filters['seed_val'],
-            date_from=self.ui._filter_date_from,
-            date_to=self.ui._filter_date_to,
-        )
+        filter_kwargs = {
+            'user_completed': True,
+            'include_private_rooms': filters['include_private'],
+            'date_from': self.ui._filter_date_from,
+            'date_to': self.ui._filter_date_to,
+        }
+        if filters['season_val'] is not None:
+            filter_kwargs['seasons'] = [filters['season_val']]
+        if filters['seed_val'] is not None:
+            filter_kwargs['seed_types'] = [filters['seed_val']]
 
-        if not self._validate_data_minimum(list(data.keys()), 2,
-                                           f'{period}s with completions'):
+        raw_matches = self.ui.analyzer.filter_matches(**filter_kwargs)
+
+        period_matches: Dict[str, list] = {}
+        for m in raw_matches:
+            lbl = m.datetime_obj.strftime(fmt)
+            period_matches.setdefault(lbl, []).append(m)
+
+        labels = sorted(period_matches.keys())
+        counts = [len(period_matches[lbl]) for lbl in labels]
+
+        if not self._validate_data_minimum(labels, 2, f'{period}s with completions'):
             return
 
-        labels = list(data.keys())
-        counts = list(data.values())
-        x_pos = list(range(len(labels)))
+        use_match_numbers = self.ui.show_match_numbers_var.get()
+
+        if use_match_numbers:
+            x_data = list(range(1, len(labels) + 1))
+            x_label = 'Period Number'
+        else:
+            if period == 'week':
+                x_data = [datetime.strptime(lbl + '-1', '%G-W%V-%u') for lbl in labels]
+            elif period == 'month':
+                x_data = [datetime.strptime(lbl + '-01', '%Y-%m-%d') for lbl in labels]
+            else:
+                x_data = [datetime.strptime(lbl, '%Y-%m-%d') for lbl in labels]
+            x_label = period.capitalize()
+
+        self._period_labels = labels
+        self._period_matches = period_matches
+        self._period_x_data = x_data
+        self._period_use_match_numbers = use_match_numbers
 
         cb = self._setup_chart_builder()
         ax = cb.get_subplot(1, 1, 1)
 
-        cb.plot_bar(ax, x_pos, counts, color_index=0)
+        cb.plot_scatter(ax, x_data, counts, color_index=0)
 
         window = self.ui.chart_options['rolling_window']
         if self.ui.chart_options['show_rolling_avg'] and len(counts) >= window:
             cb.add_rolling_average(
-                ax, x_pos, counts,
+                ax, x_data, counts,
                 window=window,
                 label=f'{window}-period average',
                 color_index=1,
@@ -1008,13 +1037,97 @@ class CompletionsChart(ChartViewBase):
         cb.set_labels(
             ax,
             title=f'{self.ui.analyzer.username} - Completions per {period.capitalize()}',
-            xlabel=period.capitalize(),
+            xlabel=x_label,
             ylabel='Completions',
         )
-        cb.set_xticks(ax, x_pos, labels, rotation=45, ha='right')
         cb.set_grid(ax, self.ui.chart_options['show_grid'])
         cb.set_legend(ax)
+
+        if not use_match_numbers:
+            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+
+        cb.canvas.mpl_connect('button_press_event', self._on_period_click)
         cb.finalize()
+
+    def _on_period_click(self, event):
+        """Show period detail dialog when a scatter point is clicked"""
+        if event.inaxes is None:
+            return
+        if not hasattr(self, '_period_x_data') or not self._period_x_data:
+            return
+
+        x_data = self._period_x_data
+        click_x = event.xdata
+
+        if hasattr(x_data[0], 'timestamp'):
+            import matplotlib.dates as mdates
+            x_nums = [mdates.date2num(x) for x in x_data]
+            distances = [abs(xn - click_x) for xn in x_nums]
+        else:
+            distances = [abs(x - click_x) for x in x_data]
+
+        # Ignore clicks too far from any point (threshold = half the typical gap)
+        min_dist = min(distances)
+        if len(x_data) > 1:
+            typical_gap = abs((x_data[-1] - x_data[0]) if not hasattr(x_data[0], 'timestamp')
+                              else (mdates.date2num(x_data[-1]) - mdates.date2num(x_data[0])))
+            threshold = typical_gap / len(x_data)
+            if min_dist > threshold:
+                return
+
+        idx = distances.index(min_dist)
+        label = self._period_labels[idx]
+        matches = self._period_matches.get(label, [])
+        self._show_period_dialog(label, matches)
+
+    def _show_period_dialog(self, label: str, matches: list):
+        """Show a dialog listing all completions in a period with average and median time"""
+        import tkinter as tk
+        from tkinter import ttk
+
+        win = tk.Toplevel(self.ui.root)
+        win.title(f'Completions — {label}')
+        win.resizable(True, True)
+
+        timed = [m for m in matches if m.match_time is not None]
+
+        # Stats header
+        header = tk.Frame(win)
+        header.pack(fill=tk.X, padx=12, pady=(10, 4))
+        tk.Label(header, text=f'{len(matches)} completion(s)', font=('Segoe UI', 10, 'bold')).pack(side=tk.LEFT)
+
+        if timed:
+            times_min = [m.match_time / 1000 / 60 for m in timed]
+            avg_str = self.ui._minutes_to_str(statistics.mean(times_min))
+            med_str = self.ui._minutes_to_str(statistics.median(times_min))
+            tk.Label(header, text=f'   Avg: {avg_str}   Median: {med_str}',
+                     font=('Segoe UI', 10)).pack(side=tk.LEFT)
+
+        # Separator
+        ttk.Separator(win, orient='horizontal').pack(fill=tk.X, padx=8, pady=2)
+
+        # Match list
+        frame = tk.Frame(win)
+        frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=(4, 10))
+
+        sb = ttk.Scrollbar(frame, orient=tk.VERTICAL)
+        lb = tk.Listbox(frame, yscrollcommand=sb.set, font=('Segoe UI', 9),
+                        width=55, height=min(len(matches), 18))
+        sb.config(command=lb.yview)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        lb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        sorted_matches = sorted(matches, key=lambda m: m.date)
+        for m in sorted_matches:
+            date_str = m.datetime_obj.strftime('%Y-%m-%d %H:%M')
+            opponent = next((p['nickname'] for p in m.players
+                             if p['nickname'].lower() != (self.ui.analyzer.username or '').lower()),
+                            'Unknown')
+            time_str = self.ui._minutes_to_str(m.match_time / 1000 / 60) if m.match_time else '—'
+            lb.insert(tk.END, f'{date_str}   vs {opponent:<20}  {time_str}')
+
+        win.update_idletasks()
+        win.minsize(win.winfo_width(), win.winfo_height())
 
 
 class ChartViewManager:
